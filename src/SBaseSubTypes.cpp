@@ -201,9 +201,6 @@ TMPQHash * LoadSqpHashTable(TMPQArchive * ha)
             // Ignore free entries
             if(pSqpHash->dwBlockIndex != HASH_ENTRY_FREE)
             {
-                // Store the hash entry to a temporary variable
-                TSQPHash TempEntry = *pSqpHash;
-
                 // Check block index against the size of the block table
                 if(pHeader->dwBlockTableSize <= MPQ_BLOCK_INDEX(pSqpHash) && pSqpHash->dwBlockIndex < HASH_ENTRY_DELETED)
                     dwErrCode = ERROR_FILE_CORRUPT;
@@ -212,13 +209,15 @@ TMPQHash * LoadSqpHashTable(TMPQArchive * ha)
                 if(pSqpHash->dwAlwaysZero != 0 && pSqpHash->dwAlwaysZero != HASH_ENTRY_FREE)
                     dwErrCode = ERROR_FILE_CORRUPT;
 
-                // Copy the entry to the MPQ hash entry
-                pMpqHash->dwName1  = TempEntry.dwName1;
-                pMpqHash->dwName2  = TempEntry.dwName2;
-                pMpqHash->dwBlockIndex = MPQ_BLOCK_INDEX(&TempEntry);
+                // Store the file name hash
+                pMpqHash->dwName1 = pSqpHash->dwName1;
+                pMpqHash->dwName2 = pSqpHash->dwName2;
+
+                // Store the rest. Note that this must be done last,
+                // because block index corresponds to pMpqHash->dwName2
+                pMpqHash->dwBlockIndex = MPQ_BLOCK_INDEX(pSqpHash);
                 pMpqHash->Platform = 0;
                 pMpqHash->lcLocale = 0;
-                pMpqHash->Reserved = 0;
             }
         }
 
@@ -242,6 +241,7 @@ TMPQBlock * LoadSqpBlockTable(TMPQArchive * ha)
     TSQPBlock * pSqpBlockEnd;
     TSQPBlock * pSqpBlock;
     TMPQBlock * pMpqBlock;
+    DWORD dwFlags;
     DWORD dwErrCode = ERROR_SUCCESS;
 
     // Load the hash table
@@ -253,18 +253,15 @@ TMPQBlock * LoadSqpBlockTable(TMPQArchive * ha)
         pMpqBlock = (TMPQBlock *)pSqpBlockTable;
         for(pSqpBlock = pSqpBlockTable; pSqpBlock < pSqpBlockEnd; pSqpBlock++, pMpqBlock++)
         {
-            // Store the block entry to a temporary variable
-            TSQPBlock TempEntry = *pSqpBlock;
-
             // Check for valid flags
             if(pSqpBlock->dwFlags & ~MPQ_FILE_VALID_FLAGS)
                 dwErrCode = ERROR_FILE_CORRUPT;
 
             // Convert SQP block table entry to MPQ block table entry
-            pMpqBlock->dwFilePos = TempEntry.dwFilePos;
-            pMpqBlock->dwCSize   = TempEntry.dwCSize;
-            pMpqBlock->dwFSize   = TempEntry.dwFSize;
-            pMpqBlock->dwFlags   = TempEntry.dwFlags;
+            dwFlags = pSqpBlock->dwFlags;
+            pMpqBlock->dwCSize = pSqpBlock->dwCSize;
+            pMpqBlock->dwFSize = pSqpBlock->dwFSize;
+            pMpqBlock->dwFlags = dwFlags;
         }
 
         // If an error occured, we need to free the hash table

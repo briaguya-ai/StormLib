@@ -48,9 +48,10 @@ bool SFileCheckWildCard(const char * szString, const char * szWildCard);
 static char * CopyListLine(char * szListLine, const char * szFileName)
 {
     // Copy the string
-    while(szFileName[0] != 0)
+    while (szFileName[0] != 0)
+    {
         *szListLine++ = *szFileName++;
-
+    }
     // Append the end-of-line
     *szListLine++ = 0x0D;
     *szListLine++ = 0x0A;
@@ -337,6 +338,13 @@ static LPBYTE CreateListFile(TMPQArchive * ha, DWORD * pcbListFile)
             // Ignore pseudo-names and internal names
             if(!IsPseudoFileName(pFileEntry->szFileName, NULL) && !IsInternalMpqFileName(pFileEntry->szFileName))
             {
+                for (int i = 0; i < strlen(pFileEntry->szFileName); i++)
+                {
+                    // OTRTODO
+                    //if (pFileEntry->szFileName[i] == '/')
+                        //pFileEntry->szFileName[i] = '\\';
+                }
+
                 SortTable[nFileNodes++] = pFileEntry->szFileName;
             }
         }
