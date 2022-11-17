@@ -48,9 +48,10 @@ bool SFileCheckWildCard(const char * szString, const char * szWildCard);
 static char * CopyListLine(char * szListLine, const char * szFileName)
 {
     // Copy the string
-    while(szFileName[0] != 0)
+    while (szFileName[0] != 0)
+    {
         *szListLine++ = *szFileName++;
-
+    }
     // Append the end-of-line
     *szListLine++ = 0x0D;
     *szListLine++ = 0x0A;
@@ -337,6 +338,13 @@ static LPBYTE CreateListFile(TMPQArchive * ha, DWORD * pcbListFile)
             // Ignore pseudo-names and internal names
             if(!IsPseudoFileName(pFileEntry->szFileName, NULL) && !IsInternalMpqFileName(pFileEntry->szFileName))
             {
+                for (int i = 0; i < strlen(pFileEntry->szFileName); i++)
+                {
+                    // OTRTODO
+                    //if (pFileEntry->szFileName[i] == '/')
+                        //pFileEntry->szFileName[i] = '\\';
+                }
+
                 SortTable[nFileNodes++] = pFileEntry->szFileName;
             }
         }
@@ -409,10 +417,8 @@ static LPBYTE CreateListFile(TMPQArchive * ha, DWORD * pcbListFile)
 static DWORD SListFileCreateNodeForAllLocales(TMPQArchive * ha, const char * szFileName)
 {
     TFileEntry * pFileEntry;
-    TMPQHash * pHashEnd;
+    TMPQHash * pFirstHash;
     TMPQHash * pHash;
-    DWORD dwName1;
-    DWORD dwName2;
 
     // If we have HET table, use that one
     if(ha->pHetTable != NULL)
@@ -430,38 +436,16 @@ static DWORD SListFileCreateNodeForAllLocales(TMPQArchive * ha, const char * szF
     // If we have hash table, we use it
     if(ha->pHashTable != NULL)
     {
-        // Get the end of the hash table and both names
-        pHashEnd = ha->pHashTable + ha->pHeader->dwHashTableSize;
-        dwName1 = ha->pfnHashString(szFileName, MPQ_HASH_NAME_A);
-        dwName2 = ha->pfnHashString(szFileName, MPQ_HASH_NAME_B);
-
-        // Some protectors set very high hash table size (0x00400000 items or more)
-        // in order to make this process very slow. We will ignore items
-        // in the hash table that would be beyond the end of the file.
-        // Example MPQ: MPQ_2022_v1_Sniper.scx
-        if(ha->dwFlags & MPQ_FLAG_HASH_TABLE_CUT)
-            pHashEnd = ha->pHashTable + (ha->dwRealHashTableSize / sizeof(TMPQHash));
-
-        // Go through the hash table and put the name in each item that has the same name pair
-        for(pHash = ha->pHashTable; pHash < pHashEnd; pHash++)
-        {
-            if(pHash->dwName1 == dwName1 && pHash->dwName2 == dwName2 && MPQ_BLOCK_INDEX(pHash) < ha->dwFileTableSize)
-            {
-                // Allocate file name for the file entry
-                AllocateFileName(ha, ha->pFileTable + MPQ_BLOCK_INDEX(pHash), szFileName);
-            }
-        }
-
         // Go while we found something
-        //pFirstHash = pHash = GetFirstHashEntry(ha, szFileName);
-        //while(pHash != NULL)
-        //{
-        //    // Allocate file name for the file entry
-        //    AllocateFileName(ha, ha->pFileTable + MPQ_BLOCK_INDEX(pHash), szFileName);
+        pFirstHash = pHash = GetFirstHashEntry(ha, szFileName);
+        while(pHash != NULL)
+        {
+            // Allocate file name for the file entry
+            AllocateFileName(ha, ha->pFileTable + MPQ_BLOCK_INDEX(pHash), szFileName);
 
-        //    // Now find the next language version of the file
-        //    pHash = GetNextHashEntry(ha, pFirstHash, pHash);
-        //}
+            // Now find the next language version of the file
+            pHash = GetNextHashEntry(ha, pFirstHash, pHash);
+        }
 
         return ERROR_SUCCESS;
     }

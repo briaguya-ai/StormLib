@@ -35,19 +35,16 @@
 //------------------------------------------------------------------------------
 // Local structures
 
-#define TFLG_COUNT_HASH     0x01000000      // There is file count in the lower 24-bits, then hash
-#define TFLG_FILE_LOCALE    0x02000000      // The process is expected to fail
-#define TFLG_WILL_FAIL      0x04000000      // The process is expected to fail
-#define TFLG_VALUE_MASK     0x00FFFFFF      // Mask for integer value
-#define TEST_DATA(hash, num)   (num | TFLG_COUNT_HASH), hash
+#define TEST_FLAG_PROTECTED  0x01000000
+#define TEST_FLAG_FILE_COUNT 0x00FFFFFF
 
 typedef struct _TEST_INFO
 {
     LPCTSTR szMpqName1;
     LPCTSTR szMpqName2;
     DWORD   dwFlags;
-    const void * param1;
-    const void * param2;
+    LPCSTR  szFileName1;
+    LPCSTR  szFileName2;
 } TEST_INFO, *PTEST_INFO;
 
 typedef struct _LINE_INFO
@@ -83,8 +80,6 @@ static const TCHAR szListFileDir[] = { '1', '9', '9', '5', ' ', '-', ' ', 'T', '
 // Global for the work MPQ
 static LPCTSTR szMpqSubDir   = _T("1995 - Test MPQs");
 static LPCTSTR szMpqPatchDir = _T("1995 - Test MPQs\\patches");
-static LPCSTR  IntToHexChar = "0123456789abcdef";
-
 
 typedef DWORD (*FIND_FILE_CALLBACK)(LPCTSTR szFullPath);
 
@@ -358,27 +353,23 @@ static bool IsMpqExtension(LPCTSTR szFileName)
     return false;
 }
 
-// Converts binary array to string.
-// The caller must ensure that the buffer has at least ((cbBinary * 2) + 1) characters
-template <typename xchar>
-xchar * StringFromBinary(LPBYTE pbBinary, size_t cbBinary, xchar * szBuffer)
+static void BinaryFromString(LPCSTR szBinary, LPBYTE pbBuffer, DWORD cbBuffer)
 {
-    xchar * szSaveBuffer = szBuffer;
+    LPBYTE pbBufferEnd = pbBuffer + cbBuffer;
+    char * szTemp;
+    char szHexaDigit[4];
 
-    // Verify the binary pointer
-    if(pbBinary && cbBinary)
+    while(szBinary[0] != 0 && pbBuffer < pbBufferEnd)
     {
-        // Convert the bytes to string array
-        for(size_t i = 0; i < cbBinary; i++)
-        {
-            *szBuffer++ = IntToHexChar[pbBinary[i] >> 0x04];
-            *szBuffer++ = IntToHexChar[pbBinary[i] & 0x0F];
-        }
-    }
+        // Get the 2-byte chunk
+        szHexaDigit[0] = szBinary[0];
+        szHexaDigit[1] = szBinary[1];
+        szHexaDigit[2] = 0;
 
-    // Terminate the string
-    *szBuffer = 0;
-    return szSaveBuffer;
+        // Convert to integer
+        *pbBuffer++ = (BYTE)strtoul(szHexaDigit, &szTemp, 16);
+        szBinary += 2;
+    }
 }
 
 static void AddStringBeforeExtension(char * szBuffer, LPCSTR szFileName, LPCSTR szExtraString)
@@ -931,23 +922,23 @@ static DWORD GetFilePatchCount(TLogHelper * pLogger, HANDLE hMpq, LPCSTR szFileN
     return nPatchCount;
 }
 
-static DWORD VerifyFilePatchCount(TLogHelper * pLogger, HANDLE hMpq, LPCSTR szFileName, DWORD dwExpectedPatchCount)
+static DWORD VerifyFilePatchCount(TLogHelper * pLogger, HANDLE hMpq, LPCSTR szFileName, int nExpectedPatchCount)
 {
-    DWORD dwPatchCount = 0;
+    int nPatchCount = 0;
 
     // Retrieve the patch count
     pLogger->PrintProgress(_T("Verifying patch count for %s ..."), szFileName);
-    dwPatchCount = GetFilePatchCount(pLogger, hMpq, szFileName);
+    nPatchCount = GetFilePatchCount(pLogger, hMpq, szFileName);
 
     // Check if there are any patches at all
-    if(dwExpectedPatchCount != 0 && dwPatchCount == 0)
+    if(nExpectedPatchCount != 0 && nPatchCount == 0)
     {
         pLogger->PrintMessage("There are no patches for %s", szFileName);
         return ERROR_FILE_CORRUPT;
     }
 
     // Check if the number of patches fits
-    if(dwPatchCount != dwExpectedPatchCount)
+    if(nPatchCount != nExpectedPatchCount)
     {
         pLogger->PrintMessage("Unexpected number of patches for %s", szFileName);
         return ERROR_FILE_CORRUPT;
@@ -1386,138 +1377,6 @@ static TFileData * LoadLocalFile(TLogHelper * pLogger, LPCTSTR szFileName, bool 
     return pFileData;
 }
 
-static DWORD LoadLocalFileMD5(TLogHelper * pLogger, LPCTSTR szLocalFileName, LPBYTE md5_file_local)
-{
-    TFileData * pFileData;
-
-    // Load the local file to memory
-    if((pFileData = LoadLocalFile(pLogger, szLocalFileName, true)) == NULL)
-    {
-        return pLogger->PrintError(_T("The file \"%s\" could not be loaded"), szLocalFileName);
-    }
-
-    // Calculate the hash
-    CalculateDataBlockHash(pFileData->FileData, pFileData->dwFileSize, md5_file_local);
-    STORM_FREE(pFileData);
-    return ERROR_SUCCESS;
-}
-
-static TFileData * LoadMpqFile(TLogHelper * pLogger, HANDLE hMpq, LPCSTR szFileName, LCID lcLocale = 0, bool bIgnoreOpedwErrCodes = false)
-{
-    TFileData * pFileData = NULL;
-    HANDLE hFile;
-    DWORD dwFileSizeHi = 0xCCCCCCCC;
-    DWORD dwFileSizeLo = 0;
-    DWORD dwBytesRead;
-    DWORD dwCrc32 = 0;
-    DWORD dwErrCode = ERROR_SUCCESS;
-
-    // Notify the user that we are loading a file from MPQ
-    pLogger->PrintProgress("Loading file %s ...", GetShortPlainName(szFileName));
-
-#if defined(_MSC_VER) && defined(_DEBUG)
-//  if(!_stricmp(szFileName, "File00000687.xxx"))
-//      __debugbreak();
-#endif
-
-    // Make sure that we open the proper locale file
-    SFileSetLocale(lcLocale);
-
-    // Open the file from MPQ
-    if(SFileOpenFileEx(hMpq, szFileName, 0, &hFile))
-    {
-        // Get the CRC32 of the file
-        SFileGetFileInfo(hFile, SFileInfoCRC32, &dwCrc32, sizeof(dwCrc32), NULL);
-
-        // Get the size of the file
-        if(dwErrCode == ERROR_SUCCESS)
-        {
-            dwFileSizeLo = SFileGetFileSize(hFile, &dwFileSizeHi);
-            if(dwFileSizeLo == SFILE_INVALID_SIZE || dwFileSizeHi != 0)
-                dwErrCode = pLogger->PrintError("Failed to query the file size");
-        }
-
-        // Spazzler protector: Creates fake files with size of 0x7FFFE7CA
-        if(dwErrCode == ERROR_SUCCESS && dwFileSizeLo > 0x1FFFFFFF)
-        {
-            dwErrCode = ERROR_FILE_CORRUPT;
-        }
-
-        // Allocate buffer for the file content
-        if(dwErrCode == ERROR_SUCCESS)
-        {
-            pFileData = (TFileData *)STORM_ALLOC(BYTE, sizeof(TFileData) + dwFileSizeLo);
-            if(pFileData == NULL)
-            {
-                pLogger->PrintError("Failed to allocate buffer for the file content");
-                dwErrCode = ERROR_NOT_ENOUGH_MEMORY;
-            }
-        }
-
-        // get the file index of the MPQ file
-        if(dwErrCode == ERROR_SUCCESS)
-        {
-            // Store the file size
-            memset(pFileData, 0, sizeof(TFileData) + dwFileSizeLo);
-            pFileData->dwFileSize = dwFileSizeLo;
-            pFileData->dwCrc32 = dwCrc32;
-
-            // Retrieve the block index and file flags
-            if(!SFileGetFileInfo(hFile, SFileInfoFileIndex, &pFileData->dwBlockIndex, sizeof(DWORD), NULL))
-                dwErrCode = pLogger->PrintError("Failed retrieve the file index of %s", szFileName);
-            if(!SFileGetFileInfo(hFile, SFileInfoFlags, &pFileData->dwFlags, sizeof(DWORD), NULL))
-                dwErrCode = pLogger->PrintError("Failed retrieve the file flags of %s", szFileName);
-        }
-
-        // Load the entire file
-        if(dwErrCode == ERROR_SUCCESS)
-        {
-            //if(!_stricmp(szFileName, "File00000687.xxx"))
-            //    __debugbreak();
-
-            // Read the file data
-            SFileReadFile(hFile, pFileData->FileData, dwFileSizeLo, &dwBytesRead, NULL);
-            if(dwBytesRead != dwFileSizeLo)
-                dwErrCode = ERROR_FILE_CORRUPT;
-        }
-
-        // If failed, free the buffer
-        if(dwErrCode != ERROR_SUCCESS)
-        {
-            SetLastError(dwErrCode);
-            if(pFileData != NULL)
-                STORM_FREE(pFileData);
-            pFileData = NULL;
-        }
-
-        SFileCloseFile(hFile);
-    }
-    else
-    {
-        if(bIgnoreOpedwErrCodes == false)
-        {
-            dwErrCode = pLogger->PrintError("Open failed: %s", szFileName);
-        }
-    }
-
-    // Return what we got
-    return pFileData;
-}
-
-static DWORD LoadMpqFileMD5(TLogHelper * pLogger, HANDLE hMpq, LPCSTR szArchivedName, LPBYTE md5_file_in_mpq1)
-{
-    TFileData * pFileData;
-
-    // Load the MPQ to memory
-    if((pFileData = LoadMpqFile(pLogger, hMpq, szArchivedName)) == NULL)
-        return pLogger->PrintError("The file \"%s\" is not in the archive", szArchivedName);
-
-    // Calculate hash
-    CalculateDataBlockHash(pFileData->FileData, pFileData->dwFileSize, md5_file_in_mpq1);
-    STORM_FREE(pFileData);
-    return ERROR_SUCCESS;
-}
-
 static DWORD CompareTwoLocalFilesRR(
     TLogHelper * pLogger,
     TFileStream * pStream1,                         // Master file
@@ -1594,6 +1453,109 @@ static DWORD CompareTwoLocalFilesRR(
     return dwErrCode;
 }
 
+static TFileData * LoadMpqFile(TLogHelper * pLogger, HANDLE hMpq, LPCSTR szFileName, LCID lcLocale = 0, bool bIgnoreOpedwErrCodes = false)
+{
+    TFileData * pFileData = NULL;
+    HANDLE hFile;
+    DWORD dwFileSizeHi = 0xCCCCCCCC;
+    DWORD dwFileSizeLo = 0;
+    DWORD dwBytesRead;
+    DWORD dwCrc32 = 0;
+    DWORD dwErrCode = ERROR_SUCCESS;
+
+    // Notify the user that we are loading a file from MPQ
+    pLogger->PrintProgress("Loading file %s ...", GetShortPlainName(szFileName));
+
+#if defined(_MSC_VER) && defined(_DEBUG)
+//  if(!_stricmp(szFileName, "File00000733.wav"))
+//      __debugbreak();
+#endif
+
+    // Make sure that we open the proper locale file
+    SFileSetLocale(lcLocale);
+
+    // Open the file from MPQ
+    if(SFileOpenFileEx(hMpq, szFileName, 0, &hFile))
+    {
+        // Get the CRC32 of the file
+        SFileGetFileInfo(hFile, SFileInfoCRC32, &dwCrc32, sizeof(dwCrc32), NULL);
+
+        // Get the size of the file
+        if(dwErrCode == ERROR_SUCCESS)
+        {
+            dwFileSizeLo = SFileGetFileSize(hFile, &dwFileSizeHi);
+            if(dwFileSizeLo == SFILE_INVALID_SIZE || dwFileSizeHi != 0)
+                dwErrCode = pLogger->PrintError("Failed to query the file size");
+        }
+
+        // Spazzler protector: Creates fake files with size of 0x7FFFE7CA
+        if(dwErrCode == ERROR_SUCCESS)
+        {
+            if(dwFileSizeLo > 0x1FFFFFFF)
+                dwErrCode = ERROR_FILE_CORRUPT;
+        }
+
+        // Allocate buffer for the file content
+        if(dwErrCode == ERROR_SUCCESS)
+        {
+            pFileData = (TFileData *)STORM_ALLOC(BYTE, sizeof(TFileData) + dwFileSizeLo);
+            if(pFileData == NULL)
+            {
+                pLogger->PrintError("Failed to allocate buffer for the file content");
+                dwErrCode = ERROR_NOT_ENOUGH_MEMORY;
+            }
+        }
+
+        // get the file index of the MPQ file
+        if(dwErrCode == ERROR_SUCCESS)
+        {
+            // Store the file size
+            memset(pFileData, 0, sizeof(TFileData) + dwFileSizeLo);
+            pFileData->dwFileSize = dwFileSizeLo;
+            pFileData->dwCrc32 = dwCrc32;
+
+            // Retrieve the block index and file flags
+            if(!SFileGetFileInfo(hFile, SFileInfoFileIndex, &pFileData->dwBlockIndex, sizeof(DWORD), NULL))
+                dwErrCode = pLogger->PrintError("Failed retrieve the file index of %s", szFileName);
+            if(!SFileGetFileInfo(hFile, SFileInfoFlags, &pFileData->dwFlags, sizeof(DWORD), NULL))
+                dwErrCode = pLogger->PrintError("Failed retrieve the file flags of %s", szFileName);
+        }
+
+        // Load the entire file
+        if(dwErrCode == ERROR_SUCCESS)
+        {
+			//if(!stricmp(szFileName, "replay.game.events"))
+			//	__debugbreak();
+
+            // Read the file data
+            SFileReadFile(hFile, pFileData->FileData, dwFileSizeLo, &dwBytesRead, NULL);
+            if(dwBytesRead != dwFileSizeLo)
+                dwErrCode = ERROR_FILE_CORRUPT;
+        }
+
+        // If failed, free the buffer
+        if(dwErrCode != ERROR_SUCCESS)
+        {
+            SetLastError(dwErrCode);
+            if(pFileData != NULL)
+                STORM_FREE(pFileData);
+            pFileData = NULL;
+        }
+
+        SFileCloseFile(hFile);
+    }
+    else
+    {
+        if(bIgnoreOpedwErrCodes == false)
+        {
+            dwErrCode = pLogger->PrintError("Open failed: %s", szFileName);
+        }
+    }
+
+    // Return what we got
+    return pFileData;
+}
+
 static bool CompareTwoFiles(TLogHelper * pLogger, TFileData * pFileData1, TFileData * pFileData2)
 {
     // Compare the file size
@@ -1662,6 +1624,9 @@ static DWORD SearchArchive(
         // Increment number of files
         dwFileCount++;
 
+//      if(!_stricmp(sf.cFileName, "war3map.j"))
+//          DebugBreak();
+
         if(dwSearchFlags & SEARCH_FLAG_MOST_PATCHED)
         {
             // Load the patch count
@@ -1695,11 +1660,6 @@ static DWORD SearchArchive(
 #endif
                 }
 
-                // Debug: Show CRC32 of each file in order to debug differences
-                //pFileData->dwCrc32 = crc32(0, pFileData->FileData, pFileData->dwFileSize);
-                //printf("%08x: %s                   \n", pFileData->dwCrc32, sf.cFileName);
-
-                // Free the loaded file data
                 STORM_FREE(pFileData);
             }
         }
@@ -2492,12 +2452,12 @@ static DWORD TestArchive(
     LPCTSTR szPlainName,                // Plain name of the MPQ
     LPCTSTR szListFile,                 // Listfile name (NULL if none)
     DWORD  dwFlags,                     // Flags
-    LPCSTR szParam1,
-    LPCSTR szParam2)
+    LPCSTR szFileName1,
+    LPCSTR szFileName2)
 {
-    TFileData * FileDataList[2] = {NULL};
+    TFileData * pFileData1 = NULL;
+    TFileData * pFileData2 = NULL;
     TLogHelper Logger("TestMpq", szPlainName);
-    LPCSTR FileNameList[2] = {NULL};
     LPCSTR szExpectedMD5 = NULL;
     HANDLE hMpq = NULL;
     DWORD dwFileCount = 0;
@@ -2507,8 +2467,8 @@ static DWORD TestArchive(
     DWORD dwExpectedFileCount = 0;
     DWORD dwMpqFlags = 0;
     TCHAR szFullName[MAX_PATH];
-    LCID lcLocale = 0;
-    BYTE ObtainedMD5[MD5_DIGEST_SIZE] = {0};
+    BYTE ExpectedMD5[MD5_DIGEST_SIZE];
+    BYTE OverallMD5[MD5_DIGEST_SIZE];
     bool bIgnoreOpedwErrCodes = false;
 
     // If the file is a partial MPQ, don't load all files
@@ -2516,23 +2476,13 @@ static DWORD TestArchive(
         dwSearchFlags |= SEARCH_FLAG_LOAD_FILES;
 
     // If the MPQ is a protected MPQ, do different tests
-    if(dwFlags & TFLG_COUNT_HASH)
+    if(dwFlags & TEST_FLAG_PROTECTED)
     {
-        if((szExpectedMD5 = szParam1) != NULL)
+        dwExpectedFileCount = (dwFlags & TEST_FLAG_FILE_COUNT);
+        if((szExpectedMD5 = szFileName1) != NULL)
             dwSearchFlags |= SEARCH_FLAG_HASH_FILES;
-        dwExpectedFileCount = (dwFlags & TFLG_VALUE_MASK);
-        szParam1 = NULL;
+        szFileName2 = szFileName1 = NULL;
     }
-
-    // If locale entered
-    if(dwFlags & TFLG_FILE_LOCALE)
-    {
-        lcLocale = (LCID)(dwFlags & TFLG_VALUE_MASK);
-    }
-
-    // Put all file names into list
-    FileNameList[0] = szParam1;
-    FileNameList[1] = szParam2;
 
     // Copy the archive so we won't fuck up the original one
     dwErrCode = OpenExistingArchiveWithCopy(&Logger, szPlainName, NULL, &hMpq);
@@ -2560,54 +2510,49 @@ static DWORD TestArchive(
         if(dwErrCode != ERROR_SUCCESS)
             break;
 
-        // For every file name given, load it and check its CRC
-        for(size_t i = 0; i < _countof(FileNameList); i++)
+        // If szFileName1 was given, load it and check its CRC
+        if(szFileName1 && szFileName1[0])
         {
-            TFileData * pFileData;
-            LPCSTR szFileName = FileNameList[i];
+            // Test setting position
+            dwErrCode = TestArchive_SetPos(hMpq, szFileName1);
+            if(dwErrCode != ERROR_SUCCESS)
+                break;
 
-            if(szFileName && szFileName[0])
+            // Load the entire file 1
+            pFileData1 = LoadMpqFile(&Logger, hMpq, szFileName1);
+            if(pFileData1 == NULL)
             {
-                // Test setting position
-                dwErrCode = TestArchive_SetPos(hMpq, szFileName);
-                if(dwErrCode != ERROR_SUCCESS)
-                    break;
+                dwErrCode = Logger.PrintError("Failed to load the file %s", szFileName1);
+                break;
+            }
 
-                // Load the entire file 1
-                FileDataList[i] = pFileData = LoadMpqFile(&Logger, hMpq, szFileName, lcLocale);
-                if(pFileData == NULL)
-                {
-                    dwErrCode = Logger.PrintError("Failed to load the file %s", szFileName);
-                    break;
-                }
+            // Check the CRC of file1, if available
+            if(pFileData1->dwCrc32)
+            {
+                // Compare the CRC32, if available
+                dwCrc32 = crc32(0, (Bytef *)pFileData1->FileData, (uInt)pFileData1->dwFileSize);
+                if(dwCrc32 != pFileData1->dwCrc32)
+                    Logger.PrintError("Warning: CRC32 error on %s", szFileName1);
+            }
+        }
 
-                // Check the CRC of file1, if available
-                if(pFileData->dwCrc32)
-                {
-                    // Compare the CRC32, if available
-                    dwCrc32 = crc32(0, (Bytef *)pFileData->FileData, (uInt)pFileData->dwFileSize);
-                    if(dwCrc32 != pFileData->dwCrc32)
-                        Logger.PrintError("Warning: CRC32 error on %s", szFileName);
-                }
-
-#ifdef _DEBUG
-/*
-                FILE * fp = fopen("e:\\out_file.wav", "wb");
-                if(fp)
-                {
-                    fwrite(pFileData->FileData, 1, pFileData->dwFileSize, fp);
-                    fclose(fp);
-                }
-*/
-#endif
+        // If szFileName2 was given, load it
+        if(szFileName2 && szFileName2[0])
+        {
+            // Load the entire file 2
+            pFileData2 = LoadMpqFile(&Logger, hMpq, szFileName2);
+            if(pFileData2 == NULL)
+            {
+                dwErrCode = Logger.PrintError("Failed to load the file %s", szFileName2);
+                break;
             }
         }
 
         // If two files were given, compare them
-        if(FileDataList[0] && FileDataList[1])
+        if(pFileData1 && pFileData2)
         {
             // Compare both files
-            if(!CompareTwoFiles(&Logger, FileDataList[0], FileDataList[1]))
+            if(!CompareTwoFiles(&Logger, pFileData1, pFileData2))
             {
                 dwErrCode = Logger.PrintError("The file has different size/content of files");
                 break;
@@ -2615,41 +2560,41 @@ static DWORD TestArchive(
         }
 
         // Search the archive
-        dwErrCode = SearchArchive(&Logger, hMpq, dwSearchFlags, &dwFileCount, ObtainedMD5);
+        dwErrCode = SearchArchive(&Logger, hMpq, dwSearchFlags, &dwFileCount, OverallMD5);
 
         // Shall we check the file count and overall MD5?
-        if(dwFlags & TFLG_COUNT_HASH)
+        if(dwExpectedFileCount != 0)
         {
             if(dwFileCount != dwExpectedFileCount)
             {
-                Logger.PrintMessage("File count mismatch(expected: %u, found: %u)", dwExpectedFileCount, dwFileCount);
+                Logger.PrintMessage("File count mismatch(expected: %u, found:%u)", dwExpectedFileCount, dwFileCount);
                 dwErrCode = ERROR_CAN_NOT_COMPLETE;
+                break;
             }
         }
 
         // Shall we check overall MD5?
         if(szExpectedMD5 && szExpectedMD5[0])
         {
-            char szObtainedMD5[0x40];
-
-            StringFromBinary(ObtainedMD5, MD5_DIGEST_SIZE, szObtainedMD5);
-            if(_stricmp(szObtainedMD5, szExpectedMD5))
+            BinaryFromString(szExpectedMD5, ExpectedMD5, MD5_DIGEST_SIZE);
+            if(memcmp(ExpectedMD5, OverallMD5, MD5_DIGEST_SIZE))
             {
-                Logger.PrintMessage("Extracted files MD5 mismatch (expected: %s, obtained: %s)", szExpectedMD5, szObtainedMD5);
+                Logger.PrintMessage("Extracted files MD5 mismatch");
                 dwErrCode = ERROR_CAN_NOT_COMPLETE;
+                break;
             }
         }
         break;
     }
 
     // Common cleanup
-    if(FileDataList[1] != NULL)
-        STORM_FREE(FileDataList[1]);
-    if(FileDataList[0] != NULL)
-        STORM_FREE(FileDataList[0]);
+    if(pFileData2 != NULL)
+        STORM_FREE(pFileData2);
+    if(pFileData1 != NULL)
+        STORM_FREE(pFileData1);
     if(hMpq != NULL)
         SFileCloseArchive(hMpq);
-    return Logger.PrintVerdict(dwErrCode);
+    return dwErrCode;
 }
 
 // Open an empty archive (found in WoW cache - it's just a header)
@@ -2694,17 +2639,15 @@ static DWORD TestOpenArchive_Corrupt(LPCTSTR szPlainName)
 
 
 // Opens a patched MPQ archive
-static DWORD TestArchive_Patched(LPCTSTR PatchList[], LPCSTR szPatchedFile, DWORD dwFlags)
+static DWORD TestOpenArchive_Patched(LPCTSTR PatchList[], LPCSTR szPatchedFile, int nExpectedPatchCount, bool bExpectedToFail = false)
 {
-    TLogHelper Logger("PatchedMPQ", PatchList[0]);
+    TLogHelper Logger("OpenPatchedMpqTest", PatchList[0]);
     HANDLE hMpq;
     HANDLE hFile;
     BYTE Buffer[0x100];
-    DWORD dwExpectedPatchCount = (dwFlags & TFLG_VALUE_MASK);
     DWORD dwFileCount = 0;
     DWORD BytesRead = 0;
     DWORD dwErrCode;
-    bool bExpectedToFail = (dwFlags & TFLG_WILL_FAIL) ? true : false;
 
     // Open a patched MPQ archive
     dwErrCode = OpenPatchedArchive(&Logger, &hMpq, PatchList);
@@ -2712,7 +2655,7 @@ static DWORD TestArchive_Patched(LPCTSTR PatchList[], LPCSTR szPatchedFile, DWOR
     {
         // Check patch count
         if(szPatchedFile != NULL)
-            dwErrCode = VerifyFilePatchCount(&Logger, hMpq, szPatchedFile, dwExpectedPatchCount);
+            dwErrCode = VerifyFilePatchCount(&Logger, hMpq, szPatchedFile, nExpectedPatchCount);
 
         // Try to open and read the file
         if(dwErrCode == ERROR_SUCCESS)
@@ -4202,35 +4145,21 @@ static DWORD TestModifyArchive_ReplaceFile(LPCTSTR szMpqPlainName, LPCTSTR szFil
     char szArchivedName[MAX_PATH];
     size_t nOffset = 0;
     DWORD dwErrCode;
-    BYTE md5_file_in_mpq1[MD5_DIGEST_SIZE];
-    BYTE md5_file_in_mpq2[MD5_DIGEST_SIZE];
-    BYTE md5_file_in_mpq3[MD5_DIGEST_SIZE];
-    BYTE md5_file_local[MD5_DIGEST_SIZE];
-
-    // Get the name of archived file
-    if(!_tcsnicmp(szFileName, _T("AddFile-"), 8))
-        nOffset = 8;
-    StringCopy(szArchivedName, _countof(szArchivedName), szFileName + nOffset);
-    CreateFullPathName(szLocalFileName, _countof(szLocalFileName), szMpqSubDir, szFileName);
 
     // Open an existing archive
     dwErrCode = OpenExistingArchiveWithCopy(&Logger, szMpqPlainName, szMpqPlainName, &hMpq);
 
-    // Open the file, load to memory, calculate hash
-    if(dwErrCode == ERROR_SUCCESS)
-    {
-        dwErrCode = LoadMpqFileMD5(&Logger, hMpq, szArchivedName, md5_file_in_mpq1);
-    }
-
-    // Open the local file, calculate hash
-    if(dwErrCode == ERROR_SUCCESS)
-    {
-        dwErrCode = LoadLocalFileMD5(&Logger, szLocalFileName, md5_file_local);
-    }
-
     // Add the given file
     if(dwErrCode == ERROR_SUCCESS)
     {
+        // Get the name of archived file
+        if(!_tcsnicmp(szFileName, _T("AddFile-"), 8))
+            nOffset = 8;
+        StringCopy(szArchivedName, _countof(szArchivedName), szFileName + nOffset);
+
+        // Create the local file name
+        CreateFullPathName(szLocalFileName, _countof(szLocalFileName), szMpqSubDir, szFileName);
+
         // Add the file to MPQ
         dwErrCode = AddLocalFileToMpq(&Logger, hMpq,
                                                szArchivedName,
@@ -4240,30 +4169,7 @@ static DWORD TestModifyArchive_ReplaceFile(LPCTSTR szMpqPlainName, LPCTSTR szFil
                                                true);
     }
 
-    // Load the file from the MPQ again and compare both MD5's
-    if(dwErrCode == ERROR_SUCCESS)
-    {
-        // Load the file from the MPQ again
-        dwErrCode = LoadMpqFileMD5(&Logger, hMpq, szArchivedName, md5_file_in_mpq2);
-        if(dwErrCode == ERROR_SUCCESS)
-        {
-            // New MPQ file must be different from the old one
-            if(!memcmp(md5_file_in_mpq2, md5_file_in_mpq1, MD5_DIGEST_SIZE))
-            {
-                Logger.PrintError("Data mismatch after adding the file \"%s\"", szArchivedName);
-                dwErrCode = ERROR_CHECKSUM_ERROR;
-            }
-
-            // New MPQ file must be identical to the local one
-            if(memcmp(md5_file_in_mpq2, md5_file_local, MD5_DIGEST_SIZE))
-            {
-                Logger.PrintError("Data mismatch after adding the file \"%s\"", szArchivedName);
-                dwErrCode = ERROR_CHECKSUM_ERROR;
-            }
-        }
-    }
-
-    // Compact the MPQ
+    // Reopen the MPQ and compact it
     if(dwErrCode == ERROR_SUCCESS)
     {
         // Compact the archive
@@ -4277,26 +4183,13 @@ static DWORD TestModifyArchive_ReplaceFile(LPCTSTR szMpqPlainName, LPCTSTR szFil
         SFileCloseArchive(hMpq);
     }
 
-    // Try to open the archive again. Ignore the previous errors
+    // Try to open the archive again
     if(dwErrCode == ERROR_SUCCESS)
     {
+        CreateFullPathName(szLocalFileName, _countof(szLocalFileName), NULL, szMpqPlainName);
         dwErrCode = OpenExistingArchive(&Logger, szLocalFileName, 0, &hMpq);
         if(dwErrCode == ERROR_SUCCESS)
-        {
-            // Load the file from the MPQ again
-            dwErrCode = LoadMpqFileMD5(&Logger, hMpq, szArchivedName, md5_file_in_mpq3);
-            if(dwErrCode == ERROR_SUCCESS)
-            {
-                // New MPQ file must be the same like the local one
-                if(!memcmp(md5_file_in_mpq3, md5_file_local, MD5_DIGEST_SIZE))
-                {
-                    Logger.PrintError("Data mismatch after adding the file \"%s\"", szArchivedName);
-                    dwErrCode = ERROR_CHECKSUM_ERROR;
-                }
-            }
-
             SFileCloseArchive(hMpq);
-        }
     }
 
     return dwErrCode;
@@ -4304,9 +4197,6 @@ static DWORD TestModifyArchive_ReplaceFile(LPCTSTR szMpqPlainName, LPCTSTR szFil
 
 //-----------------------------------------------------------------------------
 // Tables
-
-static LPCTSTR Bliz = _T("ListFile_Blizzard.txt");
-static LPCTSTR WotI = _T("ListFile_WarOfTheImmortals.txt");
 
 static const TEST_INFO TestList_StreamOps[] =
 {
@@ -4333,74 +4223,54 @@ static const TEST_INFO TestList_MasterMirror[] =
 
 static const TEST_INFO Test_Mpqs[] =
 {
+
     // Correct or damaged archives
-    {_T("MPQ_1997_v1_Diablo1_DIABDAT.MPQ"),                  NULL, 0, "music\\dintro.wav", "File00000023.xxx"},
-    {_T("MPQ_1997_v1_patch_rt_SC1B.mpq"),                    NULL, TEST_DATA("43fe7d362955be68a708486e399576a7", 10)},      // From Starcraft 1 BETA
-    {_T("MPQ_1997_v1_StarDat_SC1B.mpq"),                     NULL, TEST_DATA("0094b23f28cfff7386071ef3bd19a577", 2468)},    // From Starcraft 1 BETA
-    {_T("MPQ_1997_v1_INSTALL_SC1B.EXE_"),                    NULL, TEST_DATA("3248460c89bb6f8e3b8fc3e08de7ffbb", 79)},      // From Starcraft 1 BETA
-    {_T("MPQ_2016_v1_D2XP_IX86_1xx_114a.mpq"),               NULL, TEST_DATA("255d87a62f3c9518f72cf723a1818946", 221), "waitingroombkgd.dc6"}, // Update MPQ from Diablo II (patch 2016)
-    {_T("MPQ_2018_v1_icon_error.w3m"),                       NULL, TEST_DATA("fcefa25fb50c391e8714f2562d1e10ff", 19),  "file00000002.blp"},
-    {_T("MPQ_1997_v1_Diablo1_STANDARD.SNP"),                 Bliz, TEST_DATA("5ef18ef9a26b5704d8d46a344d976c89", 2)},       // File whose archive's (signature) file has flags = 0x90000000
-    {_T("MPQ_2012_v2_EmptyMpq.MPQ"),                         NULL, TEST_DATA("00000000000000000000000000000000", 0)},       // Empty archive (found in WoW cache - it's just a header)
-    {_T("MPQ_2013_v4_EmptyMpq.MPQ"),                         NULL, TEST_DATA("00000000000000000000000000000000", 0)},       // Empty archive (created artificially - it's just a header)
-    {_T("MPQ_2013_v4_patch-base-16357.MPQ"),                 NULL, TEST_DATA("d41d8cd98f00b204e9800998ecf8427e", 1)},       // Empty archive (found in WoW cache - it's just a header)
-    {_T("MPQ_2011_v4_InvalidHetEntryCount.MPQ"),             NULL, TEST_DATA("be4b49ecc3942d1957249f9da0021659", 6)},       // Empty archive (with invalid HET entry count)
-    {_T("MPQ_2002_v1_BlockTableCut.MPQ"),                    NULL, TEST_DATA("a9499ab74d939303d8cda7c397c36275", 287)},     // Truncated archive
-    {_T("MPQ_2010_v2_HasUserData.s2ma"),                     NULL, TEST_DATA("feff9e2c86db716b6ff5ffc906181200", 52)},      // MPQ that actually has user data
-    {_T("MPQ_2014_v1_AttributesOneEntryLess.w3x"),           NULL, TEST_DATA("90451b7052eb0f1d6f4bf69b2daff7f5", 116)},     // Warcraft III map whose "(attributes)" file has (BlockTableSize-1) entries
-    {_T("MPQ_2020_v1_AHF04patch.mix"),                       NULL, TEST_DATA("d3c6aac48bc12813ef5ce4ad113e58bf", 2891)},    // MIX file
-    {_T("MPQ_2010_v3_expansion-locale-frFR.MPQ"),            NULL, TEST_DATA("0c8fc921466f07421a281a05fad08b01", 53)},      // MPQ archive v 3.0 (the only one I know)
-    {_T("mpqe-file://MPQ_2011_v2_EncryptedMpq.MPQE"),        NULL, TEST_DATA("10e4dcdbe95b7ad731c563ec6b71bc16", 82)},      // Encrypted archive from Starcraft II installer
-    {_T("MPx_2013_v1_LongwuOnline.mpk"),                     NULL, TEST_DATA("548f7db88284097f7e94c95a08c5bc24", 469)},     // MPK archive from Longwu online
-    {_T("MPx_2013_v1_WarOfTheImmortals.sqp"),                WotI, TEST_DATA("a048f37f7c6162a96253d8081722b6d9", 9396)},    // SQP archive from War of the Immortals
-    {_T("part-file://MPQ_2010_v2_HashTableCompressed.MPQ.part"),0, TEST_DATA("d41d8cd98f00b204e9800998ecf8427e", 14263)},   // Partial MPQ with compressed hash table
-    {_T("blk4-file://streaming/model.MPQ.0"),                NULL, TEST_DATA("e06b00efb2fc7e7469dd8b3b859ae15d", 39914)},   // Archive that is merged with multiple files
+    {_T("MPQ_1997_v1_Diablo1_DIABDAT.MPQ"),    NULL, 0, "music\\dintro.wav", "File00000023.xxx"},
+    {_T("MPQ_2016_v1_D2XP_IX86_1xx_114a.mpq"), NULL, 0, "waitingroombkgd.dc6"},                   // Update MPQ from Diablo II (patch 2016)
+    {_T("MPQ_2018_v1_icon_error.w3m"),         NULL, 0, "file00000002.blp"},
+    {_T("MPQ_1997_v1_Diablo1_STANDARD.SNP"),   _T("ListFile_Blizzard.txt")},                      // File whose archive's (signature) file has flags = 0x90000000
+    {_T("MPQ_2012_v2_EmptyMpq.MPQ") },                                                            // Empty archive (found in WoW cache - it's just a header)
+    {_T("MPQ_2013_v4_EmptyMpq.MPQ") },                                                            // Empty archive (created artificially - it's just a header)
+    {_T("MPQ_2013_v4_patch-base-16357.MPQ") },                                                    // Empty archive (found in WoW cache - it's just a header)
+    {_T("MPQ_2011_v4_InvalidHetEntryCount.MPQ") },                                                // Empty archive (A buggy MPQ with invalid HET entry count)
+    {_T("MPQ_2002_v1_BlockTableCut.MPQ") },                                                       // Truncated archive
+    {_T("MPQ_2010_v2_HasUserData.s2ma") },                                                        // MPQ that actually has user data
+    {_T("MPQ_2014_v1_AttributesOneEntryLess.w3x") },                                              // Warcraft III map whose "(attributes)" file has (BlockTableSize-1) entries
+    {_T("MPQ_2020_v1_AHF04patch.mix") },                                                          // MIX file
+    {_T("MPQ_2010_v3_expansion-locale-frFR.MPQ") },                                               // MPQ archive v 3.0
+    {_T("mpqe-file://MPQ_2011_v2_EncryptedMpq.MPQE") },                                           // Encrypted archive from Starcraft II installer
+    {_T("MPx_2013_v1_LongwuOnline.mpk") },                                                        // MPK archive from Longwu online
+    {_T("MPx_2013_v1_WarOfTheImmortals.sqp"), _T("ListFile_WarOfTheImmortals.txt") },             // SQP archive from War of the Immortals
+    {_T("part-file://MPQ_2010_v2_HashTableCompressed.MPQ.part") },                                // Partial MPQ with compressed hash table
+    {_T("blk4-file://streaming/model.MPQ.0")},                                                      // Archive that is merged with multiple files
+    {_T("MPQ_2002_v1_ProtectedMap_InvalidUserData.w3x")},
+    {_T("MPQ_2002_v1_ProtectedMap_InvalidMpqFormat.w3x")},
+    {_T("MPQ_2002_v1_ProtectedMap_Spazzler.w3x")},                                                  // Warcraft III map locked by the Spazzler protector
+    {_T("MPQ_2014_v1_ProtectedMap_Spazzler2.w3x")},                                                 // Warcraft III map locked by the Spazzler protector
+    {_T("MPQ_2014_v1_ProtectedMap_Spazzler3.w3x")},                                                 // Warcraft III map locked by the Spazzler protector
+    {_T("MPQ_2002_v1_ProtectedMap_BOBA.w3m")},                                                      // Warcraft III map locked by the BOBA protector
+    {_T("MPQ_2015_v1_ProtectedMap_KangTooJee.w3x")},
+    {_T("MPQ_2015_v1_ProtectedMap_Somj2hM16.w3x")},
+    {_T("MPQ_2015_v1_ProtectedMap_Spazy.w3x")},                                                     // Warcraft III map locked by Spazy protector
+    {_T("MPQ_2015_v1_MessListFile.mpq")},
+    {_T("MPQ_2016_v1_ProtectedMap_TableSizeOverflow.w3x")},
+    {_T("MPQ_2016_v1_ProtectedMap_HashOffsIsZero.w3x")},
+    {_T("MPQ_2016_v1_ProtectedMap_Somj2.w3x")},                                                     // Something like Somj 2.0
+    {_T("MPQ_2016_v1_WME4_4.w3x")},                                                                 // Protector from China (2016-05-27)
+    {_T("MPQ_2016_v1_SP_(4)Adrenaline.w3x")},
+    {_T("MPQ_2016_v1_ProtectedMap_1.4.w3x")},
+    {_T("MPQ_2016_v1_KoreanFile.w3m")},
+    {_T("MPQ_2017_v1_Eden_RPG_S2_2.5J.w3x")},                                                       // Load map protected by PG1.11.973
+    {_T("MPQ_2017_v1_BigDummyFiles.w3x")},
+    {_T("MPQ_2017_v1_TildeInFileName.mpq")},
+    {_T("MPQ_2018_v1_EWIX_v8_7.w3x"), NULL, 0, "BlueCrystal.mdx"},
+    {_T("MPQ_2020_v4_FakeMpqHeaders.SC2Mod")},                                                      // Archive that has two fake headers before the real one
+    {_T("MPQ_2020_v4_NP_Protect_1.s2ma")},                                                          // SC2 map that is protected by the NP_Protect
+    {_T("MPQ_2020_v4_NP_Protect_2.s2ma")},                                                          // SC2 map that is protected by the NP_Protect
 
     // Protected archives
-    {_T("MPQ_2002_v1_ProtectedMap_InvalidUserData.w3x"),     NULL, TEST_DATA("b900364cc134a51ddeca21a13697c3ca", 79)},
-    {_T("MPQ_2002_v1_ProtectedMap_InvalidMpqFormat.w3x"),    NULL, TEST_DATA("db67e894da9de618a1cdf86d02d315ff", 117)},
-    {_T("MPQ_2002_v1_ProtectedMap_Spazzler.w3x"),            NULL, TEST_DATA("72d7963aa799a7fb4117c55b7beabaf9", 470)},     // Warcraft III map locked by the Spazzler protector
-    {_T("MPQ_2014_v1_ProtectedMap_Spazzler2.w3x"),           NULL, TEST_DATA("72d7963aa799a7fb4117c55b7beabaf9", 470)},     // Warcraft III map locked by the Spazzler protector
-    {_T("MPQ_2014_v1_ProtectedMap_Spazzler3.w3x"),           NULL, TEST_DATA("e55aad2dd33cf68b372ca8e30dcb78a7", 130)},     // Warcraft III map locked by the Spazzler protector
-    {_T("MPQ_2002_v1_ProtectedMap_BOBA.w3m"),                NULL, TEST_DATA("7b725d87e07a2173c42fe2314b95fa6c", 17)},      // Warcraft III map locked by the BOBA protector
-    {_T("MPQ_2015_v1_ProtectedMap_KangTooJee.w3x"),          NULL, TEST_DATA("44111a3edf7645bc44bb1afd3a813576", 1715)},
-    {_T("MPQ_2015_v1_ProtectedMap_Somj2hM16.w3x"),           NULL, TEST_DATA("b411f9a51a6e9a9a509150c8d66ba359", 92)},
-    {_T("MPQ_2015_v1_ProtectedMap_Spazy.w3x"),               NULL, TEST_DATA("6e491bd055511435dcb4d9c8baed0516", 4089)},    // Warcraft III map locked by Spazy protector
-    {_T("MPQ_2015_v1_MessListFile.mpq"),                     NULL, TEST_DATA("15e25d5be124d8ad71519f967997efc2", 8)},
-    {_T("MPQ_2016_v1_ProtectedMap_TableSizeOverflow.w3x"),   NULL, TEST_DATA("ad81b43cbd37bbfa27e4bed4c17e6a81", 176)},
-    {_T("MPQ_2016_v1_ProtectedMap_HashOffsIsZero.w3x"),      NULL, TEST_DATA("d6e712c275a26dc51f16b3a02f6187df", 228)},
-    {_T("MPQ_2016_v1_ProtectedMap_Somj2.w3x"),               NULL, TEST_DATA("457cdbf97a9ca41cfe8ea130dafaa0bb", 21)},      // Something like Somj 2.0
-    {_T("MPQ_2016_v1_WME4_4.w3x"),                           NULL, TEST_DATA("7ec2f4d0f3982d8b12d88bc08ef0c1fb", 640)},     // Protector from China (2016-05-27)
-    {_T("MPQ_2016_v1_SP_(4)Adrenaline.w3x"),                 NULL, TEST_DATA("b6f6d56f4f8aaef04c2c4b1f08881a8b", 16)},
-    {_T("MPQ_2016_v1_ProtectedMap_1.4.w3x"),                 NULL, TEST_DATA("3c7908b29d3feac9ec952282390a242d", 5027)},
-    {_T("MPQ_2016_v1_KoreanFile.w3m"),                       NULL, TEST_DATA("805d1f75712472a81c6df27b2a71f946", 18)},
-    {_T("MPQ_2017_v1_Eden_RPG_S2_2.5J.w3x"),                 NULL, TEST_DATA("cbe1fd7ed5ed2fc005fba9beafcefe40", 16334)},   // Protected by PG1.11.973
-    {_T("MPQ_2017_v1_BigDummyFiles.w3x"),                    NULL, TEST_DATA("f4d2ee9d85d2c4107e0b2d00ff302dd7", 9086)},
-    {_T("MPQ_2017_v1_TildeInFileName.mpq"),                  NULL, TEST_DATA("f203e3979247a4dbf7f3828695ac810c", 5)},
-    {_T("MPQ_2018_v1_EWIX_v8_7.w3x"),                        NULL, TEST_DATA("12c0f4e15c7361b7c13acd37a181d83b", 857), "BlueCrystal.mdx"},
-    {_T("MPQ_2020_v4_FakeMpqHeaders.SC2Mod"),                NULL, TEST_DATA("f45392f6523250c943990a017c230b41", 24)},      // Archive that has two fake headers before the real one
-    {_T("MPQ_2020_v4_NP_Protect_1.s2ma"),                    NULL, TEST_DATA("1a1ea40ac1165bcdb4f2e434edfc7636", 21)},      // SC2 map that is protected by the NP_Protect
-    {_T("MPQ_2020_v4_NP_Protect_2.s2ma"),                    NULL, TEST_DATA("7d1a379da8bd966da1f4fa6e4646049b", 55)},      // SC2 map that is protected by the NP_Protect
-    {_T("MPQ_2015_v1_flem1.w3x"),                            NULL, TEST_DATA("1c4c13e627658c473e84d94371e31f37", 20)},
-    {_T("MPQ_2002_v1_ProtectedMap_HashTable_FakeValid.w3x"), NULL, TEST_DATA("5250975ed917375fc6540d7be436d4de", 114)},
-    {_T("MPQ_2021_v1_CantExtractCHK.scx"),                   NULL, TEST_DATA("055fd548a789c910d9dd37472ecc1e66", 28)},
-    {_T("MPQ_2022_v1_Sniper.scx"),                           NULL, TEST_DATA("2e955271b70b79344ad85b698f6ce9d8", 64)},      // Multiple items in hash table for staredit\scenario.chk (locale=0, platform=0)
-    {_T("MPQ_2022_v1_OcOc_Bound_2.scx"),                     NULL, TEST_DATA("25cad16a2fb4e883767a1f512fc1dce7", 16)},
-};
-
-static const TEST_INFO Patched_Mpqs[] =
-{
-    {NULL, NULL,  0,              PatchList_StarCraft,         "music\\terran1.wav"},
-    {NULL, NULL,  2,              PatchList_WoW_OldWorld13286, "OldWorld\\World\\Model.blob"},
-    {NULL, NULL,  8,              PatchList_WoW_15050,         "World\\Model.blob"},
-    {NULL, NULL,  0,              PatchList_WoW_16965,         "DBFilesClient\\BattlePetNPCTeamMember.db2"},
-    {NULL, NULL,  6,              PatchList_SC2_32283,         "TriggerLibs\\natives.galaxy"},
-    {NULL, NULL,  2,              PatchList_SC2_34644,         "TriggerLibs\\GameData\\GameData.galaxy"},
-    {NULL, NULL,  3,              PatchList_SC2_34644_Maps,    "Maps\\Campaign\\THorner03.SC2Map\\BankList.xml"},
-    {NULL, NULL,  TFLG_WILL_FAIL, PatchList_SC2_32283_enGB,    "Assets\\Textures\\startupimage.dds"},
-    {NULL, NULL,  6,              PatchList_SC2_36281_enGB,    "LocalizedData\\GameHotkeys.txt"},
-    {NULL, NULL,  1,              PatchList_HS_3604_enGB,      "Hearthstone.exe"},
-    {NULL, NULL, 10,              PatchList_HS_6898_enGB,      "Hearthstone_Data\\Managed\\Assembly-Csharp.dll"}
+    {_T("MPQ_2015_v1_flem1.w3x"), NULL, TEST_FLAG_PROTECTED | 20, "1c4c13e627658c473e84d94371e31f37"},
+    {_T("MPQ_2002_v1_ProtectedMap_HashTable_FakeValid.w3x"), NULL, TEST_FLAG_PROTECTED | 114, "5250975ed917375fc6540d7be436d4de"},
 };
 
 //-----------------------------------------------------------------------------
@@ -4419,23 +4289,32 @@ int _tmain(int argc, TCHAR * argv[])
     dwErrCode = InitializeMpqDirectory(argv, argc);
 
     //
-    // Test-open MPQs from the command line. They must be plain name
-    // and must be placed in the Test-MPQs folder
-    //
-
-    for(int i = 2; i < argc; i++)
-    {
-        TestArchive(argv[i], Bliz, 0, "sound\\zerg\\advisor\\zaderr05.wav", NULL);
-    }
-
-    //
     // Tests on a local listfile
     //
-
+    /*
     if(dwErrCode == ERROR_SUCCESS)
     {
         TestOnLocalListFile(_T("FLAT-MAP:ListFile_Blizzard.txt"));
         dwErrCode = TestOnLocalListFile(_T("ListFile_Blizzard.txt"));
+    }
+    */
+    //
+    // Open all files from the command line
+    //
+
+	TestArchive(_T("ProblemMpqArchive.SC2Replay"), NULL, 0, "replay.game.events", NULL);
+    for(int i = 1; i < argc; i++)
+    {
+        TestOpenArchive_CompactArchive(argv[i], _T("TestArchiveCopy.mpq"), false);
+    }
+
+    //
+    // Search all testing archives and verify their SHA1 hash
+    //
+
+    if(dwErrCode == ERROR_SUCCESS)
+    {
+        dwErrCode = FindFiles(ForEachFile_VerifyFileChecksum, szMpqSubDir);
     }
 
     //
@@ -4476,52 +4355,71 @@ int _tmain(int argc, TCHAR * argv[])
     {
         for(size_t i = 0; i < _countof(Test_Mpqs); i++)
         {
-            dwErrCode = TestArchive(Test_Mpqs[i].szMpqName1,        // Plain archive name
-                                    Test_Mpqs[i].szMpqName2,        // List file (NULL if none)
-                                    Test_Mpqs[i].dwFlags,           // What exactly to do
-                            (LPCSTR)Test_Mpqs[i].param1,            // The 1st parameter
-                            (LPCSTR)Test_Mpqs[i].param2);           // The 2nd parameter
-//          if(dwErrCode != ERROR_SUCCESS)
-//              break;
-            dwErrCode = ERROR_SUCCESS;
+            dwErrCode = TestArchive(Test_Mpqs[i].szMpqName1,         // Plain archive name
+                                    Test_Mpqs[i].szMpqName2,         // List file (NULL if none)
+                                    Test_Mpqs[i].dwFlags,            // What exactly to do
+                                    Test_Mpqs[i].szFileName1,        // The first name of the open file
+                                    Test_Mpqs[i].szFileName2);       // The second name of the open file
+            if(dwErrCode != ERROR_SUCCESS)
+                break;
         }
     }
-
-    //
-    // Test opening patched archives - correct, damaged, protected
-    //
-
-    if(dwErrCode == ERROR_SUCCESS)
-    {
-        for(size_t i = 0; i < _countof(Patched_Mpqs); i++)
-        {
-            LPCTSTR * PatchList = (LPCTSTR *)Patched_Mpqs[i].param1;
-            LPCSTR szFileName = (LPCSTR)Patched_Mpqs[i].param2;
-
-            dwErrCode = TestArchive_Patched(PatchList,              // List of patches
-                                            szFileName,             // Name of a file
-                                            Patched_Mpqs[i].dwFlags);
-//          if(dwErrCode != ERROR_SUCCESS)
-//              break;
-            dwErrCode = ERROR_SUCCESS;
-        }
-    }
-
-    // Veryfy SHA1 of each MPQ that we have in the list
-    if(dwErrCode == ERROR_SUCCESS)
-        dwErrCode = FindFiles(ForEachFile_VerifyFileChecksum, szMpqSubDir);
-
-    // Open every MPQ that we have in the storage
-    if(dwErrCode == ERROR_SUCCESS)
-        dwErrCode = FindFiles(ForEachFile_OpenArchive, NULL);
 
     // Open the multi-file archive with wrong prefix to see how StormLib deals with it
     if(dwErrCode == ERROR_SUCCESS)
         dwErrCode = TestOpenArchive_WillFail(_T("flat-file://streaming/model.MPQ.0"));
 
+    // Open every MPQ that we have in the storage
+    if(dwErrCode == ERROR_SUCCESS)
+        dwErrCode = FindFiles(ForEachFile_OpenArchive, NULL);
+
     // Test on an archive that has been invalidated by extending an old valid MPQ
     if(dwErrCode == ERROR_SUCCESS)
         dwErrCode = TestOpenArchive_Corrupt(_T("MPQ_2013_vX_Battle.net.MPQ"));
+
+    // Open a patched archive
+    if(dwErrCode == ERROR_SUCCESS)
+        dwErrCode = TestOpenArchive_Patched(PatchList_StarCraft, "music\\terran1.wav", 0);
+
+    // Open a patched archive
+    if(dwErrCode == ERROR_SUCCESS)
+        dwErrCode = TestOpenArchive_Patched(PatchList_WoW_OldWorld13286, "OldWorld\\World\\Model.blob", 2);
+
+    // Open a patched archive
+    if(dwErrCode == ERROR_SUCCESS)
+        dwErrCode = TestOpenArchive_Patched(PatchList_WoW_15050, "World\\Model.blob", 8);
+
+    // Open a patched archive
+    if(dwErrCode == ERROR_SUCCESS)
+        dwErrCode = TestOpenArchive_Patched(PatchList_WoW_16965, "DBFilesClient\\BattlePetNPCTeamMember.db2", 0);
+
+    // Open a patched archive
+    if(dwErrCode == ERROR_SUCCESS)
+        dwErrCode = TestOpenArchive_Patched(PatchList_SC2_32283, "TriggerLibs\\natives.galaxy", 6);
+
+    // Open a patched archive
+    if(dwErrCode == ERROR_SUCCESS)
+        dwErrCode = TestOpenArchive_Patched(PatchList_SC2_34644, "TriggerLibs\\GameData\\GameData.galaxy", 2);
+
+    // Open a patched archive with new format of BSDIFF patch
+    if(dwErrCode == ERROR_SUCCESS)
+        dwErrCode = TestOpenArchive_Patched(PatchList_SC2_34644_Maps, "Maps\\Campaign\\THorner03.SC2Map\\BankList.xml", 3);
+
+    // Open a patched archive
+    if(dwErrCode == ERROR_SUCCESS)
+        dwErrCode = TestOpenArchive_Patched(PatchList_SC2_32283_enGB, "Assets\\Textures\\startupimage.dds", 0, true);
+
+    // Open a patched archive where the "StreamingBuckets.txt" in the patch doesn't contain MPQ_FILE_PATCH_FILE
+    if(dwErrCode == ERROR_SUCCESS)
+        dwErrCode = TestOpenArchive_Patched(PatchList_SC2_36281_enGB, "LocalizedData\\GameHotkeys.txt", 6);
+
+    // Open a patched archive
+    if(dwErrCode == ERROR_SUCCESS)
+        dwErrCode = TestOpenArchive_Patched(PatchList_HS_3604_enGB, "Hearthstone.exe", 1);
+
+    // Open a patched archive
+    if(dwErrCode == ERROR_SUCCESS)
+        dwErrCode = TestOpenArchive_Patched(PatchList_HS_6898_enGB, "Hearthstone_Data\\Managed\\Assembly-Csharp.dll", 10);
 
     // Check the opening archive for read-only
     if(dwErrCode == ERROR_SUCCESS)
@@ -4534,6 +4432,14 @@ int _tmain(int argc, TCHAR * argv[])
     // Check the SFileGetFileInfo function
     if(dwErrCode == ERROR_SUCCESS)
         dwErrCode = TestOpenArchive_GetFileInfo(_T("MPQ_2002_v1_StrongSignature.w3m"), _T("MPQ_2013_v4_SC2_EmptyMap.SC2Map"));
+
+    // Downloadable MPQ archive
+    if(dwErrCode == ERROR_SUCCESS)
+        dwErrCode = TestOpenArchive_MasterMirror(_T("part-file://MPQ_2009_v1_patch-partial.MPQ.part"), _T("MPQ_2009_v1_patch-original.MPQ"), "world\\Azeroth\\DEADMINES\\PASSIVEDOODADS\\GOBLINMELTINGPOT\\DUST2.BLP", false);
+
+    // Downloadable MPQ archive
+    if(dwErrCode == ERROR_SUCCESS)
+        dwErrCode = TestOpenArchive_MasterMirror(_T("MPQ_2013_v4_alternate-downloaded.MPQ"), _T("MPQ_2013_v4_alternate-original.MPQ"), "alternate\\DUNGEONS\\TEXTURES\\ICECROWN\\GATE\\jlo_IceC_Floor_Thrown.blp", false);
 
     // Check archive signature
     if(dwErrCode == ERROR_SUCCESS)
@@ -4665,9 +4571,6 @@ int _tmain(int argc, TCHAR * argv[])
     // Test replacing a file with zero size file
     if(dwErrCode == ERROR_SUCCESS)
         dwErrCode = TestModifyArchive_ReplaceFile(_T("MPQ_2014_v4_Base.StormReplay"), _T("AddFile-replay.message.events"));
-
-    if(dwErrCode == ERROR_SUCCESS)
-        dwErrCode = TestModifyArchive_ReplaceFile(_T("MPQ_2022_v1_v4.329.w3x"), _T("AddFile-war3map.j"));
 
 #ifdef _MSC_VER
     _CrtDumpMemoryLeaks();

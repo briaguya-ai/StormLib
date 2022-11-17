@@ -71,9 +71,9 @@
     <ProjectGuid>{78424708-1F6E-4D4B-920C-FB6D26847055}</ProjectGuid>
     <RootNamespace>StormLib</RootNamespace>
     <XPDeprecationWarning>false</XPDeprecationWarning>
-    <WindowsTargetPlatformVersion>10.0.17134.0</WindowsTargetPlatformVersion>
+    <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
     <ConfigurationType>StaticLibrary</ConfigurationType>
-    <PlatformToolset>v141_xp</PlatformToolset>
+    <PlatformToolset>v142</PlatformToolset>
     <UseOfMfc>false</UseOfMfc>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
@@ -269,14 +269,12 @@
       <PrecompiledHeader />
       <WarningLevel>Level1</WarningLevel>
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
-      <MultiProcessorCompilation>true</MultiProcessorCompilation>
     </ClCompile>
     <Lib>
       <OutputFile>./bin/$(ProjectName)/$(Platform)/$(Configuration)/$(TargetName).lib</OutputFile>
     </Lib>
     <PostBuildEvent>
-      <Command>
-      </Command>
+      <Command>PostBuild.bat $(ProjectName) $(Platform) $(Configuration)</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='DebugAD|x64'">
@@ -291,14 +289,12 @@
       <PrecompiledHeader />
       <WarningLevel>Level1</WarningLevel>
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
-      <MultiProcessorCompilation>true</MultiProcessorCompilation>
     </ClCompile>
     <Lib>
       <OutputFile>./bin/$(ProjectName)/$(Platform)/$(Configuration)/$(TargetName).lib</OutputFile>
     </Lib>
     <PostBuildEvent>
-      <Command>
-      </Command>
+      <Command>PostBuild.bat $(ProjectName) $(Platform) $(Configuration)</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='DebugAS|Win32'">
@@ -310,14 +306,12 @@
       <PrecompiledHeader />
       <WarningLevel>Level1</WarningLevel>
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
-      <MultiProcessorCompilation>true</MultiProcessorCompilation>
     </ClCompile>
     <Lib>
       <OutputFile>./bin/$(ProjectName)/$(Platform)/$(Configuration)/$(TargetName).lib</OutputFile>
     </Lib>
     <PostBuildEvent>
-      <Command>
-      </Command>
+      <Command>PostBuild.bat $(ProjectName) $(Platform) $(Configuration)</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='DebugAS|x64'">
@@ -332,14 +326,12 @@
       <PrecompiledHeader />
       <WarningLevel>Level1</WarningLevel>
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
-      <MultiProcessorCompilation>true</MultiProcessorCompilation>
     </ClCompile>
     <Lib>
       <OutputFile>./bin/$(ProjectName)/$(Platform)/$(Configuration)/$(TargetName).lib</OutputFile>
     </Lib>
     <PostBuildEvent>
-      <Command>
-      </Command>
+      <Command>PostBuild.bat $(ProjectName) $(Platform) $(Configuration)</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='ReleaseAD|Win32'">
@@ -350,14 +342,12 @@
       <PrecompiledHeader />
       <WarningLevel>Level1</WarningLevel>
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
-      <MultiProcessorCompilation>true</MultiProcessorCompilation>
     </ClCompile>
     <Lib>
       <OutputFile>./bin/$(ProjectName)/$(Platform)/$(Configuration)/$(TargetName).lib</OutputFile>
     </Lib>
     <PostBuildEvent>
-      <Command>
-      </Command>
+      <Command>PostBuild.bat $(ProjectName) $(Platform) $(Configuration)</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='ReleaseAD|x64'">
@@ -371,14 +361,12 @@
       <PrecompiledHeader />
       <WarningLevel>Level1</WarningLevel>
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
-      <MultiProcessorCompilation>true</MultiProcessorCompilation>
     </ClCompile>
     <Lib>
       <OutputFile>./bin/$(ProjectName)/$(Platform)/$(Configuration)/$(TargetName).lib</OutputFile>
     </Lib>
     <PostBuildEvent>
-      <Command>
-      </Command>
+      <Command>PostBuild.bat $(ProjectName) $(Platform) $(Configuration)</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='ReleaseAS|Win32'">
@@ -389,14 +377,12 @@
       <PrecompiledHeader />
       <WarningLevel>Level1</WarningLevel>
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
-      <MultiProcessorCompilation>true</MultiProcessorCompilation>
     </ClCompile>
     <Lib>
       <OutputFile>./bin/$(ProjectName)/$(Platform)/$(Configuration)/$(TargetName).lib</OutputFile>
     </Lib>
     <PostBuildEvent>
-      <Command>
-      </Command>
+      <Command>PostBuild.bat $(ProjectName) $(Platform) $(Configuration)</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='ReleaseAS|x64'">
@@ -410,14 +396,12 @@
       <PrecompiledHeader />
       <WarningLevel>Level1</WarningLevel>
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
-      <MultiProcessorCompilation>true</MultiProcessorCompilation>
     </ClCompile>
     <Lib>
       <OutputFile>./bin/$(ProjectName)/$(Platform)/$(Configuration)/$(TargetName).lib</OutputFile>
     </Lib>
     <PostBuildEvent>
-      <Command>
-      </Command>
+      <Command>PostBuild.bat $(ProjectName) $(Platform) $(Configuration)</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='DebugUD|Win32'">
@@ -429,14 +413,12 @@
       <PrecompiledHeader />
       <WarningLevel>Level1</WarningLevel>
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
-      <MultiProcessorCompilation>true</MultiProcessorCompilation>
     </ClCompile>
     <Lib>
       <OutputFile>./bin/$(ProjectName)/$(Platform)/$(Configuration)/$(TargetName).lib</OutputFile>
     </Lib>
     <PostBuildEvent>
-      <Command>
-      </Command>
+      <Command>PostBuild.bat $(ProjectName) $(Platform) $(Configuration)</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='DebugUD|x64'">
@@ -451,14 +433,12 @@
       <PrecompiledHeader />
       <WarningLevel>Level1</WarningLevel>
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
-      <MultiProcessorCompilation>true</MultiProcessorCompilation>
     </ClCompile>
     <Lib>
       <OutputFile>./bin/$(ProjectName)/$(Platform)/$(Configuration)/$(TargetName).lib</OutputFile>
     </Lib>
     <PostBuildEvent>
-      <Command>
-      </Command>
+      <Command>PostBuild.bat $(ProjectName) $(Platform) $(Configuration)</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='DebugUS|Win32'">
@@ -470,14 +450,12 @@
       <PrecompiledHeader />
       <WarningLevel>Level1</WarningLevel>
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
-      <MultiProcessorCompilation>true</MultiProcessorCompilation>
     </ClCompile>
     <Lib>
       <OutputFile>./bin/$(ProjectName)/$(Platform)/$(Configuration)/$(TargetName).lib</OutputFile>
     </Lib>
     <PostBuildEvent>
-      <Command>
-      </Command>
+      <Command>PostBuild.bat $(ProjectName) $(Platform) $(Configuration)</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='DebugUS|x64'">
@@ -492,14 +470,12 @@
       <PrecompiledHeader />
       <WarningLevel>Level1</WarningLevel>
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
-      <MultiProcessorCompilation>true</MultiProcessorCompilation>
     </ClCompile>
     <Lib>
       <OutputFile>./bin/$(ProjectName)/$(Platform)/$(Configuration)/$(TargetName).lib</OutputFile>
     </Lib>
     <PostBuildEvent>
-      <Command>
-      </Command>
+      <Command>PostBuild.bat $(ProjectName) $(Platform) $(Configuration)</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='ReleaseUD|Win32'">
@@ -510,14 +486,12 @@
       <PrecompiledHeader />
       <WarningLevel>Level1</WarningLevel>
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
-      <MultiProcessorCompilation>true</MultiProcessorCompilation>
     </ClCompile>
     <Lib>
       <OutputFile>./bin/$(ProjectName)/$(Platform)/$(Configuration)/$(TargetName).lib</OutputFile>
     </Lib>
     <PostBuildEvent>
-      <Command>
-      </Command>
+      <Command>PostBuild.bat $(ProjectName) $(Platform) $(Configuration)</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='ReleaseUD|x64'">
@@ -531,14 +505,12 @@
       <PrecompiledHeader />
       <WarningLevel>Level1</WarningLevel>
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
-      <MultiProcessorCompilation>true</MultiProcessorCompilation>
     </ClCompile>
     <Lib>
       <OutputFile>./bin/$(ProjectName)/$(Platform)/$(Configuration)/$(TargetName).lib</OutputFile>
     </Lib>
     <PostBuildEvent>
-      <Command>
-      </Command>
+      <Command>PostBuild.bat $(ProjectName) $(Platform) $(Configuration)</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='ReleaseUS|Win32'">
@@ -549,14 +521,12 @@
       <PrecompiledHeader />
       <WarningLevel>Level1</WarningLevel>
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
-      <MultiProcessorCompilation>true</MultiProcessorCompilation>
     </ClCompile>
     <Lib>
       <OutputFile>./bin/$(ProjectName)/$(Platform)/$(Configuration)/$(TargetName).lib</OutputFile>
     </Lib>
     <PostBuildEvent>
-      <Command>
-      </Command>
+      <Command>PostBuild.bat $(ProjectName) $(Platform) $(Configuration)</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='ReleaseUS|x64'">
@@ -570,14 +540,14 @@
       <PrecompiledHeader />
       <WarningLevel>Level1</WarningLevel>
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
-      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <BufferSecurityCheck>false</BufferSecurityCheck>
+      <EnableEnhancedInstructionSet>StreamingSIMDExtensions</EnableEnhancedInstructionSet>
     </ClCompile>
     <Lib>
       <OutputFile>./bin/$(ProjectName)/$(Platform)/$(Configuration)/$(TargetName).lib</OutputFile>
     </Lib>
     <PostBuildEvent>
-      <Command>
-      </Command>
+      <Command>PostBuild.bat $(ProjectName) $(Platform) $(Configuration)</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>

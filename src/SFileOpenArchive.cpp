@@ -35,27 +35,20 @@ static MTYPE CheckMapType(LPCTSTR szFileName, LPBYTE pbHeaderBuffer, size_t cbHe
         DWORD DwordValue2 = BSWAP_INT32_UNSIGNED(HeaderInt32[2]);
         DWORD DwordValue3 = BSWAP_INT32_UNSIGNED(HeaderInt32[3]);
 
-        // Check maps by extension (Starcraft, Starcraft II). We must do this before
-        // checking actual data, because the "NP_Protect" protector places
-        // fake Warcraft III header into the Starcraft II maps
+        // Test for AVI files (Warcraft III cinematics) - 'RIFF', 'AVI ' or 'LIST'
+        if(DwordValue0 == 0x46464952 && DwordValue2 == 0x20495641 && DwordValue3 == 0x5453494C)
+            return MapTypeAviFile;
+
+        // Check for Starcraft II maps
         if((szExtension = _tcsrchr(szFileName, _T('.'))) != NULL)
         {
-            // Check for Starcraft II maps by extension
+            // The "NP_Protect" protector places fake Warcraft III header
+            // into the Starcraft II maps, whilst SC2 maps have no other header but MPQ v4
             if(!_tcsicmp(szExtension, _T(".s2ma")) || !_tcsicmp(szExtension, _T(".SC2Map")) || !_tcsicmp(szExtension, _T(".SC2Mod")))
             {
                 return MapTypeStarcraft2;
             }
-
-            // Check for Starcraft I maps by extension
-            if(!_tcsicmp(szExtension, _T(".scm")) || !_tcsicmp(szExtension, _T(".scx")))
-            {
-                return MapTypeStarcraft;
-            }
         }
-
-        // Test for AVI files (Warcraft III cinematics) - 'RIFF', 'AVI ' or 'LIST'
-        if(DwordValue0 == 0x46464952 && DwordValue2 == 0x20495641 && DwordValue3 == 0x5453494C)
-            return MapTypeAviFile;
 
         // Check for Warcraft III maps
         if(DwordValue0 == 0x57334D48 && DwordValue1 == 0x00000000)
@@ -73,20 +66,6 @@ static MTYPE CheckMapType(LPCTSTR szFileName, LPBYTE pbHeaderBuffer, size_t cbHe
 
     // No special map type recognized
     return MapTypeNotRecognized;
-}
-
-static bool IsStarcraftBetaArchive(TMPQHeader * pHeader)
-{
-    // The archive must be version 1, with a standard header size
-    if(pHeader->dwID == ID_MPQ && pHeader->dwHeaderSize == MPQ_HEADER_SIZE_V1)
-    {
-        // Check for known archive sizes
-        return (pHeader->dwArchiveSize == 0x00028FB3 ||     // patch_rt.mpq
-                pHeader->dwArchiveSize == 0x0351853D ||     // StarDat.mpq
-                pHeader->dwArchiveSize == 0x0AEC8960);      // INSTALL.exe
-
-    }
-    return false;
 }
 
 static TMPQUserData * IsValidMpqUserData(ULONGLONG ByteOffset, ULONGLONG FileSize, void * pvUserData)
@@ -292,7 +271,6 @@ bool WINAPI SFileOpenArchive(
         bool bSearchComplete = false;
 
         memset(ha, 0, sizeof(TMPQArchive));
-        ha->dwValidFileFlags = MPQ_FILE_VALID_FLAGS;
         ha->pfnHashString = HashStringSlash;
         ha->pStream = pStream;
         pStream = NULL;
@@ -310,8 +288,6 @@ bool WINAPI SFileOpenArchive(
         // Limit the header searching to about 130 MB of data
         if(EndOfSearch > 0x08000000)
             EndOfSearch = 0x08000000;
-        if(FileSize < HEADER_SEARCH_BUFFER_SIZE)
-            memset(pbHeaderBuffer, 0, HEADER_SEARCH_BUFFER_SIZE);
 
         // Find the offset of MPQ header within the file
         while(bSearchComplete == false && ByteOffset < EndOfSearch)
@@ -460,20 +436,9 @@ bool WINAPI SFileOpenArchive(
         if(dwFlags & MPQ_OPEN_FORCE_LISTFILE)
             ha->dwFlags |= MPQ_FLAG_LISTFILE_FORCE;
 
-        // StarDat.mpq from Starcraft I BETA: Enable special compression types
-        if(IsStarcraftBetaArchive(ha->pHeader))
-            ha->dwFlags |= MPQ_FLAG_STARCRAFT_BETA;
-
         // Remember whether whis is a map for Warcraft III
         if(MapType == MapTypeWarcraft3)
-        {
-            ha->dwValidFileFlags = MPQ_FILE_VALID_FLAGS_W3X;
             ha->dwFlags |= MPQ_FLAG_WAR3_MAP;
-        }
-
-        // If this is starcraft map, set the flag mask
-        if(MapType == MapTypeStarcraft)
-            ha->dwValidFileFlags = MPQ_FILE_VALID_FLAGS_SCX;
 
         // Set the size of file sector
         ha->dwSectorSize = (0x200 << ha->pHeader->wSectorSize);

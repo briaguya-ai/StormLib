@@ -81,7 +81,6 @@ typedef enum _MTYPE
     MapTypeNotChecked,                  // The map type was not checked yet
     MapTypeNotRecognized,               // The file does not seems to be a map
     MapTypeAviFile,                     // The file is actually an AVI file (Warcraft III cinematics)
-    MapTypeStarcraft,                   // The file is a Starcraft map
     MapTypeWarcraft3,                   // The file is a Warcraft III map
     MapTypeStarcraft2                   // The file is a Starcraft II map
 } MTYPE, *PMTYPE;
@@ -210,7 +209,8 @@ void StringCat(TCHAR * szTarget, size_t cchTargetMax, const TCHAR * szSource);
 #define MPQ_HASH_KEY2_MIX       0x400
 
 DWORD HashString(const char * szFileName, DWORD dwHashType);
-DWORD HashStringSlash(const char * szFileName, DWORD dwHashType);
+DWORD HashStringSlash(const char* szFileName, DWORD dwHashType);
+DWORD HashStringSlash2(const char * szFileName, DWORD dwHashType);
 DWORD HashStringLower(const char * szFileName, DWORD dwHashType);
 
 void  InitializeMpqCryptography();
@@ -282,7 +282,8 @@ TMPQBetTable * CreateBetTable(DWORD dwMaxFileCount);
 void FreeBetTable(TMPQBetTable * pBetTable);
 
 // Functions for finding files in the file table
-TFileEntry * GetFileEntryLocale(TMPQArchive * ha, const char * szFileName, LCID lcLocale, LPDWORD PtrHashIndex = NULL);
+TFileEntry * GetFileEntryLocale2(TMPQArchive * ha, const char * szFileName, LCID lcLocale, LPDWORD PtrHashIndex);
+TFileEntry * GetFileEntryLocale(TMPQArchive * ha, const char * szFileName, LCID lcLocale);
 TFileEntry * GetFileEntryExact(TMPQArchive * ha, const char * szFileName, LCID lcLocale, LPDWORD PtrHashIndex);
 
 // Allocates file name in the file entry
@@ -317,7 +318,7 @@ int SCompDecompressMpk(void * pvOutBuffer, int * pcbOutBuffer, void * pvInBuffer
 
 TMPQFile * CreateFileHandle(TMPQArchive * ha, TFileEntry * pFileEntry);
 TMPQFile * CreateWritableHandle(TMPQArchive * ha, DWORD dwFileSize);
-void * LoadMpqTable(TMPQArchive * ha, ULONGLONG ByteOffset, LPBYTE pbTableHash, DWORD dwCompressedSize, DWORD dwRealSize, DWORD dwKey, DWORD * PtrRealTableSize);
+void * LoadMpqTable(TMPQArchive * ha, ULONGLONG ByteOffset, LPBYTE pbTableHash, DWORD dwCompressedSize, DWORD dwRealSize, DWORD dwKey, bool * pbTableIsCut);
 DWORD AllocateSectorBuffer(TMPQFile * hf);
 DWORD AllocatePatchInfo(TMPQFile * hf, bool bLoadFromFile);
 DWORD AllocateSectorOffsets(TMPQFile * hf, bool bLoadFromFile);

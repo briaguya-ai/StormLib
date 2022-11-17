@@ -159,48 +159,34 @@ static DWORD ReadMpqSectors(TMPQFile * hf, LPBYTE pbBuffer, DWORD dwByteOffset, 
             // by comparing uncompressed and compressed size !!!
             if(dwRawBytesInThisSector < dwBytesInThisSector)
             {
-                if(dwRawBytesInThisSector != 0)
+                int cbOutSector = dwBytesInThisSector;
+                int cbInSector = dwRawBytesInThisSector;
+                int nResult = 0;
+
+                // Is the file compressed by Blizzard's multiple compression ?
+                if(pFileEntry->dwFlags & MPQ_FILE_COMPRESS)
                 {
-                    int cbOutSector = dwBytesInThisSector;
-                    int cbInSector = dwRawBytesInThisSector;
-                    int nResult = 0;
+                    // Remember the last used compression
+                    hf->dwCompression0 = pbInSector[0];
 
-                    // Is the file compressed by Blizzard's multiple compression ?
-                    if(pFileEntry->dwFlags & MPQ_FILE_COMPRESS)
-                    {
-                        // Remember the last used compression
-                        hf->dwCompression0 = pbInSector[0];
-
-                        // Decompress the data
-                        if(ha->pHeader->wFormatVersion >= MPQ_FORMAT_VERSION_2)
-                        {
-                            nResult = SCompDecompress2(pbOutSector, &cbOutSector, pbInSector, cbInSector);
-                        }
-                        else
-                        {
-                            if(ha->dwFlags & MPQ_FLAG_STARCRAFT_BETA)
-                                nResult = SCompDecompress_SC1B(pbOutSector, &cbOutSector, pbInSector, cbInSector);
-                            else
-                                nResult = SCompDecompress(pbOutSector, &cbOutSector, pbInSector, cbInSector);
-                        }
-                    }
-
-                    // Is the file compressed by PKWARE Data Compression Library ?
-                    else if(pFileEntry->dwFlags & MPQ_FILE_IMPLODE)
-                    {
-                        nResult = SCompExplode(pbOutSector, &cbOutSector, pbInSector, cbInSector);
-                    }
-
-                    // Did the decompression fail ?
-                    if(nResult == 0)
-                    {
-                        dwErrCode = ERROR_FILE_CORRUPT;
-                        break;
-                    }
+                    // Decompress the data
+                    if(ha->pHeader->wFormatVersion >= MPQ_FORMAT_VERSION_2)
+                        nResult = SCompDecompress2(pbOutSector, &cbOutSector, pbInSector, cbInSector);
+                    else
+                        nResult = SCompDecompress(pbOutSector, &cbOutSector, pbInSector, cbInSector);
                 }
-                else
+
+                // Is the file compressed by PKWARE Data Compression Library ?
+                else if(pFileEntry->dwFlags & MPQ_FILE_IMPLODE)
                 {
-                    memset(pbOutSector, 0, dwBytesInThisSector);
+                    nResult = SCompExplode(pbOutSector, &cbOutSector, pbInSector, cbInSector);
+                }
+
+                // Did the decompression fail ?
+                if(nResult == 0)
+                {
+                    dwErrCode = ERROR_FILE_CORRUPT;
+                    break;
                 }
             }
             else
@@ -677,8 +663,7 @@ static DWORD ReadMpqFileLocalFile(TMPQFile * hf, void * pvBuffer, DWORD dwFilePo
 
 bool WINAPI SFileReadFile(HANDLE hFile, void * pvBuffer, DWORD dwToRead, LPDWORD pdwRead, LPOVERLAPPED lpOverlapped)
 {
-    TFileEntry * pFileEntry;
-    TMPQFile * hf;
+    TMPQFile * hf = (TMPQFile *)hFile;
     DWORD dwBytesRead = 0;                      // Number of bytes read
     DWORD dwErrCode = ERROR_SUCCESS;
 
@@ -688,7 +673,7 @@ bool WINAPI SFileReadFile(HANDLE hFile, void * pvBuffer, DWORD dwToRead, LPDWORD
     lpOverlapped = lpOverlapped;
 
     // Check valid parameters
-    if((hf = IsValidFileHandle(hFile)) == NULL)
+    if(!IsValidFileHandle(hFile))
     {
         SetLastError(ERROR_INVALID_HANDLE);
         return false;
@@ -712,7 +697,6 @@ bool WINAPI SFileReadFile(HANDLE hFile, void * pvBuffer, DWORD dwToRead, LPDWORD
     }
 
     // Clear the last used compression
-    pFileEntry = hf->pFileEntry;
     hf->dwCompression0 = 0;
 
     // If the file is local file, read the data directly from the stream
@@ -722,7 +706,7 @@ bool WINAPI SFileReadFile(HANDLE hFile, void * pvBuffer, DWORD dwToRead, LPDWORD
     }
 
     // If the file is a patch file, we have to read it special way
-    else if(hf->hfPatch != NULL && (pFileEntry->dwFlags & MPQ_FILE_PATCH_FILE) == 0)
+    else if(hf->hfPatch != NULL && (hf->pFileEntry->dwFlags & MPQ_FILE_PATCH_FILE) == 0)
     {
         dwErrCode = ReadMpqFilePatchFile(hf, pvBuffer, hf->dwFilePos, dwToRead, &dwBytesRead);
     }
@@ -734,7 +718,7 @@ bool WINAPI SFileReadFile(HANDLE hFile, void * pvBuffer, DWORD dwToRead, LPDWORD
     }
 
     // If the file is single unit file, redirect it to read file
-    else if(pFileEntry->dwFlags & MPQ_FILE_SINGLE_UNIT)
+    else if(hf->pFileEntry->dwFlags & MPQ_FILE_SINGLE_UNIT)
     {
         dwErrCode = ReadMpqFileSingleUnit(hf, pvBuffer, hf->dwFilePos, dwToRead, &dwBytesRead);
     }

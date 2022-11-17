@@ -776,27 +776,26 @@ static TMPQHash * GetHashEntryLocale(TMPQArchive * ha, const char * szFileName, 
     {
         // Storm_2016.dll: 150209CB
         // If the hash entry matches both locale and platform, return it immediately
-        // Only do that for non-0 locale&platform, because for loc&plat=0, there's different
-        // processing in Warcraft III vs. Starcraft, which is abused by some protectors.
+        // Note: We only succeed this check if the locale is non-neutral, because
+        // some Warcraft III maps have several items with neutral locale&platform, which leads
+        // to wrong item being returned
         if((lcLocale || Platform) && pHash->lcLocale == lcLocale && pHash->Platform == Platform)
             return pHash;
 
         // Storm_2016.dll: 150209D9
-        // If (locale matches or is neutral) OR (platform matches or is neutral), remember this as the best entry
-        // Also remember the first matching entry for Starcraft maps
+        // If (locale matches or is neutral) OR (platform matches or is neutral)
+        // remember this as the best entry
         if(pHash->lcLocale == 0 || pHash->lcLocale == lcLocale)
         {
             if(pHash->Platform == 0 || pHash->Platform == Platform)
-            {
                 pBestEntry = pHash;
-            }
         }
 
         // Get the next hash entry for that file
         pHash = GetNextHashEntry(ha, pFirstHash, pHash);
     }
 
-    // Return the best entry that we found
+    // At the end, return neutral hash (if found), otherwise NULL
     return pBestEntry;
 }
 
@@ -828,7 +827,6 @@ static TMPQHash * GetHashEntryExact(TMPQArchive * ha, const char * szFileName, L
 // are not HASH_ENTRY_FREE, the startup search index does not matter.
 // Hash table is circular, so as long as there is no terminator,
 // all entries will be found.
-/*
 static TMPQHash * DefragmentHashTable(
     TMPQArchive * ha,
     TMPQHash  * pHashTable,
@@ -883,7 +881,6 @@ static TMPQHash * DefragmentHashTable(
 
     return pHashTable;
 }
-*/
 
 static DWORD BuildFileTableFromBlockTable(
     TMPQArchive * ha,
@@ -896,29 +893,21 @@ static DWORD BuildFileTableFromBlockTable(
     TMPQHash * pHash;
     LPDWORD DefragmentTable = NULL;
     DWORD dwItemCount = 0;
+    DWORD dwFlagMask;
 
     // Sanity checks
     assert(ha->pFileTable != NULL);
     assert(ha->dwFileTableSize >= ha->dwMaxFileCount);
 
-    //
-    // Defragmentation of the hash table was removed. The reason is a MPQ protector,
-    // two hash entries with the same name, where only the second one is valid.
-    // The index of the first entry (HashString(szFileName, 0)) points to the second one:
-    //
-    //      NameA     NameB     BlkIdx    Name
-    //      B701656E  FCFB1EED  0000001C  staredit\scenario.chk (correct one)
-    // -->  B701656E  FCFB1EED  0000001D  staredit\scenario.chk (corrupt one)
-    //
-    // Defragmenting the hash table corrupts the order and "staredit\scenario.chk" can't be read
-    // Example MPQ: MPQ_2022_v1_Sniper.scx
-    //
+    // MPQs for Warcraft III doesn't know some flags, namely MPQ_FILE_SINGLE_UNIT and MPQ_FILE_PATCH_FILE
+    dwFlagMask = (ha->dwFlags & MPQ_FLAG_WAR3_MAP) ? MPQ_FILE_VALID_FLAGS_W3X : MPQ_FILE_VALID_FLAGS;
 
-    //if(ha->dwFlags & MPQ_FLAG_HASH_TABLE_CUT)
-    //{
-    //    ha->pHashTable = DefragmentHashTable(ha, ha->pHashTable, pBlockTable);
-    //    ha->dwMaxFileCount = pHeader->dwHashTableSize;
-    //}
+    // Defragment the hash table, if needed
+    if(ha->dwFlags & MPQ_FLAG_HASH_TABLE_CUT)
+    {
+        ha->pHashTable = DefragmentHashTable(ha, ha->pHashTable, pBlockTable);
+        ha->dwMaxFileCount = pHeader->dwHashTableSize;
+    }
 
     // If the hash table or block table is cut,
     // we will defragment the block table
@@ -987,12 +976,10 @@ static DWORD BuildFileTableFromBlockTable(
             if(pFileEntry->ByteOffset == 0 && pBlock->dwFSize == 0)
                 pFileEntry->ByteOffset = ha->pHeader->dwHeaderSize;
 
-            // Clear file flags that are unknown to this type of map.
-            pFileEntry->dwFlags = pBlock->dwFlags & ha->dwValidFileFlags;
-
             // Fill the rest of the file entry
-            pFileEntry->dwFileSize = pBlock->dwFSize;
-            pFileEntry->dwCmpSize  = pBlock->dwCSize;
+            pFileEntry->dwFileSize  = pBlock->dwFSize;
+            pFileEntry->dwCmpSize   = pBlock->dwCSize;
+            pFileEntry->dwFlags     = pBlock->dwFlags & dwFlagMask;
         }
     }
 
@@ -1480,32 +1467,31 @@ static TMPQHetTable * TranslateHetTable(TMPQHetHeader * pHetHeader)
         if(pHetHeader->ExtHdr.dwDataSize >= pHetHeader->dwTableSize)
         {
             // The size of the HET table must be sum of header, hash and index table size
-            if((sizeof(TMPQHetHeader) - sizeof(TMPQExtHeader) + pHetHeader->dwTotalCount + pHetHeader->dwIndexTableSize) == pHetHeader->dwTableSize)
+            assert((sizeof(TMPQHetHeader) - sizeof(TMPQExtHeader) + pHetHeader->dwTotalCount + pHetHeader->dwIndexTableSize) == pHetHeader->dwTableSize);
+
+            // So far, all MPQs with HET Table have had total number of entries equal to 4/3 of file count
+            // Exception: "2010 - Starcraft II\!maps\Tya's Zerg Defense (unprotected).SC2Map"
+//          assert(((pHetHeader->dwEntryCount * 4) / 3) == pHetHeader->dwTotalCount);
+
+            // The size of one index is predictable as well
+            assert(GetNecessaryBitCount(pHetHeader->dwEntryCount) == pHetHeader->dwIndexSizeTotal);
+
+            // The size of index table (in entries) is expected
+            // to be the same like the hash table size (in bytes)
+            assert(((pHetHeader->dwTotalCount * pHetHeader->dwIndexSizeTotal) + 7) / 8 == pHetHeader->dwIndexTableSize);
+
+            // Create translated table
+            pHetTable = CreateHetTable(pHetHeader->dwEntryCount, pHetHeader->dwTotalCount, pHetHeader->dwNameHashBitSize, pbSrcData);
+            if(pHetTable != NULL)
             {
-                // So far, all MPQs with HET Table have had total number of entries equal to 4/3 of file count
-                // Exception: "2010 - Starcraft II\!maps\Tya's Zerg Defense (unprotected).SC2Map"
-//              assert(((pHetHeader->dwEntryCount * 4) / 3) == pHetHeader->dwTotalCount);
+                // Now the sizes in the hash table should be already set
+                assert(pHetTable->dwEntryCount     == pHetHeader->dwEntryCount);
+                assert(pHetTable->dwTotalCount     == pHetHeader->dwTotalCount);
+                assert(pHetTable->dwIndexSizeTotal == pHetHeader->dwIndexSizeTotal);
 
-                // The size of one index is predictable as well
-                assert(GetNecessaryBitCount(pHetHeader->dwEntryCount) == pHetHeader->dwIndexSizeTotal);
-
-                // The size of index table (in entries) is expected
-                // to be the same like the hash table size (in bytes)
-                assert(((pHetHeader->dwTotalCount * pHetHeader->dwIndexSizeTotal) + 7) / 8 == pHetHeader->dwIndexTableSize);
-
-                // Create translated table
-                pHetTable = CreateHetTable(pHetHeader->dwEntryCount, pHetHeader->dwTotalCount, pHetHeader->dwNameHashBitSize, pbSrcData);
-                if(pHetTable != NULL)
-                {
-                    // Now the sizes in the hash table should be already set
-                    assert(pHetTable->dwEntryCount     == pHetHeader->dwEntryCount);
-                    assert(pHetTable->dwTotalCount     == pHetHeader->dwTotalCount);
-                    assert(pHetTable->dwIndexSizeTotal == pHetHeader->dwIndexSizeTotal);
-
-                    // Copy the missing variables
-                    pHetTable->dwIndexSizeExtra = pHetHeader->dwIndexSizeExtra;
-                    pHetTable->dwIndexSize      = pHetHeader->dwIndexSize;
-                }
+                // Copy the missing variables
+                pHetTable->dwIndexSizeExtra = pHetHeader->dwIndexSizeExtra;
+                pHetTable->dwIndexSize      = pHetHeader->dwIndexSize;
             }
         }
     }
@@ -1967,7 +1953,7 @@ void FreeBetTable(TMPQBetTable * pBetTable)
 //-----------------------------------------------------------------------------
 // Support for file table
 
-TFileEntry * GetFileEntryLocale(TMPQArchive * ha, const char * szFileName, LCID lcLocale, LPDWORD PtrHashIndex)
+TFileEntry * GetFileEntryLocale2(TMPQArchive * ha, const char * szFileName, LCID lcLocale, LPDWORD PtrHashIndex)
 {
     TMPQHash * pHash;
     DWORD dwFileIndex;
@@ -1996,6 +1982,11 @@ TFileEntry * GetFileEntryLocale(TMPQArchive * ha, const char * szFileName, LCID 
 
     // Not found
     return NULL;
+}
+
+TFileEntry * GetFileEntryLocale(TMPQArchive * ha, const char * szFileName, LCID lcLocale)
+{
+    return GetFileEntryLocale2(ha, szFileName, lcLocale, NULL);
 }
 
 TFileEntry * GetFileEntryExact(TMPQArchive * ha, const char * szFileName, LCID lcLocale, LPDWORD PtrHashIndex)
@@ -2325,7 +2316,7 @@ static TMPQHash * LoadHashTable(TMPQArchive * ha)
     TMPQHash * pHashTable = NULL;
     DWORD dwTableSize;
     DWORD dwCmpSize;
-    DWORD dwRealTableSize = 0;
+    bool bHashTableIsCut = false;
 
     // Note: It is allowed to load hash table if it is at offset 0.
     // Example: MPQ_2016_v1_ProtectedMap_HashOffsIsZero.w3x
@@ -2347,15 +2338,12 @@ static TMPQHash * LoadHashTable(TMPQArchive * ha)
             dwCmpSize = (DWORD)pHeader->HashTableSize64;
 
             // Read, decrypt and uncompress the hash table
-            pHashTable = (TMPQHash *)LoadMpqTable(ha, ByteOffset, pHeader->MD5_HashTable, dwCmpSize, dwTableSize, g_dwHashTableKey, &dwRealTableSize);
+            pHashTable = (TMPQHash *)LoadMpqTable(ha, ByteOffset, pHeader->MD5_HashTable, dwCmpSize, dwTableSize, g_dwHashTableKey, &bHashTableIsCut);
 //          DumpHashTable(pHashTable, pHeader->dwHashTableSize);
 
             // If the hash table was cut, we can/have to defragment it
-            if(pHashTable != NULL && dwRealTableSize != 0 && dwRealTableSize < dwTableSize)
-            {
-                ha->dwRealHashTableSize = dwRealTableSize;
+            if(pHashTable != NULL && bHashTableIsCut)
                 ha->dwFlags |= (MPQ_FLAG_MALFORMED | MPQ_FLAG_HASH_TABLE_CUT);
-            }
             break;
 
         case MPQ_SUBTYPE_SQP:
@@ -2389,7 +2377,7 @@ TMPQBlock * LoadBlockTable(TMPQArchive * ha, bool /* bDontFixEntries */)
     ULONGLONG ByteOffset;
     DWORD dwTableSize;
     DWORD dwCmpSize;
-    DWORD dwRealTableSize;
+    bool bBlockTableIsCut = false;
 
     // Note: It is possible that the block table starts at offset 0
     // Example: MPQ_2016_v1_ProtectedMap_HashOffsIsZero.w3x
@@ -2411,10 +2399,10 @@ TMPQBlock * LoadBlockTable(TMPQArchive * ha, bool /* bDontFixEntries */)
             dwCmpSize = (DWORD)pHeader->BlockTableSize64;
 
             // Read, decrypt and uncompress the block table
-            pBlockTable = (TMPQBlock * )LoadMpqTable(ha, ByteOffset, NULL, dwCmpSize, dwTableSize, g_dwBlockTableKey, &dwRealTableSize);
+            pBlockTable = (TMPQBlock * )LoadMpqTable(ha, ByteOffset, NULL, dwCmpSize, dwTableSize, g_dwBlockTableKey, &bBlockTableIsCut);
 
             // If the block table was cut, we need to remember it
-            if(pBlockTable != NULL && dwRealTableSize && dwRealTableSize < dwTableSize)
+            if(pBlockTable != NULL && bBlockTableIsCut)
                 ha->dwFlags |= (MPQ_FLAG_MALFORMED | MPQ_FLAG_BLOCK_TABLE_CUT);
             break;
 
@@ -2445,7 +2433,7 @@ TMPQHetTable * LoadHetTable(TMPQArchive * ha)
         pExtTable = LoadExtTable(ha, pHeader->HetTablePos64, (size_t)pHeader->HetTableSize64, HET_TABLE_SIGNATURE, MPQ_KEY_HASH_TABLE);
         if(pExtTable != NULL)
         {
-            // Translate the loaded table into HET table.
+            // If loading HET table fails, we ignore the result.
             pHetTable = TranslateHetTable((TMPQHetHeader *)pExtTable);
             STORM_FREE(pExtTable);
         }
