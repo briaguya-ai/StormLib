@@ -199,7 +199,6 @@ bool WINAPI SFileGetFileInfo(
     TFileEntry * pFileEntry = NULL;
     TMPQHeader * pHeader = NULL;
     ULONGLONG Int64Value = 0;
-    ULONGLONG ByteOffset;
     TMPQFile * hf = NULL;
     void * pvSrcFileInfo = NULL;
     DWORD cbSrcFileInfo = 0;
@@ -318,8 +317,7 @@ bool WINAPI SFileGetFileInfo(
             return GetInfo(pvFileInfo, cbFileInfo, &pHeader->dwBlockTableSize, sizeof(DWORD), pcbLengthNeeded);
 
         case SFileMpqBlockTable:
-            ByteOffset = FileOffsetFromMpqOffset(ha, MAKE_OFFSET64(pHeader->wBlockTablePosHi, pHeader->dwBlockTablePos));
-            if(ByteOffset >= ha->FileSize)
+            if(MAKE_OFFSET64(pHeader->wBlockTablePosHi, pHeader->dwBlockTablePos) >= ha->FileSize)
                 return GetInfo_ReturdwErrCode(ERROR_FILE_NOT_FOUND);
             cbSrcFileInfo = pHeader->dwBlockTableSize * sizeof(TMPQBlock);
             pvSrcFileInfo = LoadBlockTable(ha, true);
@@ -443,10 +441,10 @@ bool WINAPI SFileGetFileInfo(
 
         case SFileInfoCRC32:
             return GetInfo(pvFileInfo, cbFileInfo, &hf->pFileEntry->dwCrc32, sizeof(DWORD), pcbLengthNeeded);
-        default:
-            // Invalid info class
-            return GetInfo_ReturdwErrCode(ERROR_INVALID_PARAMETER);
     }
+
+    // Invalid info class
+    return GetInfo_ReturdwErrCode(ERROR_INVALID_PARAMETER);
 }
 
 bool WINAPI SFileFreeFileInfo(void * pvFileInfo, SFileInfoClass InfoClass)

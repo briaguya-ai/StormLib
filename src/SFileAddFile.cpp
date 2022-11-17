@@ -80,7 +80,7 @@ static bool IsWaveFile_16BitsPerAdpcmSample(
     return false;
 }
 
-static DWORD FillWritableHandle(
+static int FillWritableHandle(
     TMPQArchive * ha,
     TMPQFile * hf,
     ULONGLONG FileTime,
@@ -99,13 +99,14 @@ static DWORD FillWritableHandle(
     pFileEntry->dwCmpSize = 0;
     pFileEntry->dwFlags  = dwFlags | MPQ_FILE_EXISTS;
 
-    // Initialize hashing of the file
-    if((hf->hctx = STORM_ALLOC(hash_state, 1)) != NULL)
-        md5_init((hash_state *)hf->hctx);
-
-    // Fill-in file time and CRC
-    pFileEntry->FileTime = FileTime;
+    // Initialize the file time, CRC32 and MD5
+    //assert(sizeof(hf->hctx) >= sizeof(hash_state));
+    memset(pFileEntry->md5, 0, MD5_DIGEST_SIZE);
+    md5_init((hash_state *)hf->hctx);
     pFileEntry->dwCrc32 = crc32(0, Z_NULL, 0);
+
+    // If the caller gave us a file time, use it.
+    pFileEntry->FileTime = FileTime;
 
     // Mark the archive as modified
     ha->dwFlags |= MPQ_FLAG_CHANGED;
@@ -174,9 +175,8 @@ static DWORD WriteDataToMpqFile(
                 // Set the position in the file
                 ByteOffset = hf->RawFilePos + pFileEntry->dwCmpSize;
 
-                // Update MD5 and CRC32 of the file
-                if(hf->hctx != NULL)
-                    md5_process((hash_state *)hf->hctx, hf->pbFileSector, dwBytesInSector);
+                // Update CRC32 and MD5 of the file
+                md5_process((hash_state *)hf->hctx, hf->pbFileSector, dwBytesInSector);
                 hf->dwCrc32 = crc32(hf->dwCrc32, hf->pbFileSector, dwBytesInSector);
 
                 // Compress the file sector, if needed
@@ -423,7 +423,7 @@ DWORD SFileAddFile_Init(
     if(!(dwFlags & MPQ_FILE_COMPRESS_MASK))
         dwFlags &= ~MPQ_FILE_SECTOR_CRC;
 
-    // Fix Key is not allowed if the file is not encrypted
+    // Fix Key is not allowed if the file is not enrypted
     if(!(dwFlags & MPQ_FILE_ENCRYPTED))
         dwFlags &= ~MPQ_FILE_FIX_KEY;
 
@@ -441,7 +441,7 @@ DWORD SFileAddFile_Init(
     if(dwErrCode == ERROR_SUCCESS)
     {
         // Check if the file already exists in the archive
-        pFileEntry = GetFileEntryLocale(ha, szFileName, lcLocale, &dwHashIndex);
+        pFileEntry = GetFileEntryExact(ha, szFileName, lcLocale, &dwHashIndex);
         if(pFileEntry != NULL)
         {
             if(dwFlags & MPQ_FILE_REPLACEEXISTING)
@@ -662,8 +662,7 @@ DWORD SFileAddFile_Write(TMPQFile * hf, const void * pvData, DWORD dwSize, DWORD
             pFileEntry->dwCrc32 = hf->dwCrc32;
 
             // Finish calculating MD5
-            if(hf->hctx != NULL)
-                md5_done((hash_state *)hf->hctx, pFileEntry->md5);
+            md5_done((hash_state *)hf->hctx, pFileEntry->md5);
 
             // If we also have sector checksums, write them to the file
             if(hf->SectorChksums != NULL)
@@ -796,7 +795,7 @@ bool WINAPI SFileCreateFile(
     if(dwErrCode == ERROR_SUCCESS)
     {
         // Mask all unsupported flags out
-        dwFlags &= ha->dwValidFileFlags;
+        dwFlags &= (ha->dwFlags & MPQ_FLAG_WAR3_MAP) ? MPQ_FILE_VALID_FLAGS_W3X : MPQ_FILE_VALID_FLAGS;
 
         // Check for valid flag combinations
         if((dwFlags & (MPQ_FILE_IMPLODE | MPQ_FILE_COMPRESS)) == (MPQ_FILE_IMPLODE | MPQ_FILE_COMPRESS))
@@ -1285,7 +1284,7 @@ bool WINAPI SFileSetFileLocale(HANDLE hFile, LCID lcNewLocale)
     }
 
     // We have to check if the file+locale is not already there
-    pFileEntry = GetFileEntryLocale(ha, hf->pFileEntry->szFileName, lcNewLocale, NULL);
+    pFileEntry = GetFileEntryExact(ha, hf->pFileEntry->szFileName, lcNewLocale, NULL);
     if(pFileEntry != NULL)
     {
         SetLastError(ERROR_ALREADY_EXISTS);

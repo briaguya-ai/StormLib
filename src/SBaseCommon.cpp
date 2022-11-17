@@ -95,6 +95,49 @@ unsigned char AsciiToUpperTable_Slash[256] =
     0xF0, 0xF1, 0xF2, 0xF3, 0xF4, 0xF5, 0xF6, 0xF7, 0xF8, 0xF9, 0xFA, 0xFB, 0xFC, 0xFD, 0xFE, 0xFF
 };
 
+// 5C (\) -> 2F (/)
+unsigned char AsciiToUpperTable_FS2BS[256] =
+{
+    0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F,
+    0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18, 0x19, 0x1A, 0x1B, 0x1C, 0x1D, 0x1E, 0x1F,
+    0x20, 0x21, 0x22, 0x23, 0x24, 0x25, 0x26, 0x27, 0x28, 0x29, 0x2A, 0x2B, 0x2C, 0x2D, 0x2E, 0x2F,
+    0x30, 0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37, 0x38, 0x39, 0x3A, 0x3B, 0x3C, 0x3D, 0x3E, 0x3F,
+    0x40, 0x41, 0x42, 0x43, 0x44, 0x45, 0x46, 0x47, 0x48, 0x49, 0x4A, 0x4B, 0x4C, 0x4D, 0x4E, 0x4F,
+    0x50, 0x51, 0x52, 0x53, 0x54, 0x55, 0x56, 0x57, 0x58, 0x59, 0x5A, 0x5B, 0x2F, 0x5D, 0x5E, 0x5F,
+    0x60, 0x41, 0x42, 0x43, 0x44, 0x45, 0x46, 0x47, 0x48, 0x49, 0x4A, 0x4B, 0x4C, 0x4D, 0x4E, 0x4F,
+    0x50, 0x51, 0x52, 0x53, 0x54, 0x55, 0x56, 0x57, 0x58, 0x59, 0x5A, 0x7B, 0x7C, 0x7D, 0x7E, 0x7F,
+    0x80, 0x81, 0x82, 0x83, 0x84, 0x85, 0x86, 0x87, 0x88, 0x89, 0x8A, 0x8B, 0x8C, 0x8D, 0x8E, 0x8F,
+    0x90, 0x91, 0x92, 0x93, 0x94, 0x95, 0x96, 0x97, 0x98, 0x99, 0x9A, 0x9B, 0x9C, 0x9D, 0x9E, 0x9F,
+    0xA0, 0xA1, 0xA2, 0xA3, 0xA4, 0xA5, 0xA6, 0xA7, 0xA8, 0xA9, 0xAA, 0xAB, 0xAC, 0xAD, 0xAE, 0xAF,
+    0xB0, 0xB1, 0xB2, 0xB3, 0xB4, 0xB5, 0xB6, 0xB7, 0xB8, 0xB9, 0xBA, 0xBB, 0xBC, 0xBD, 0xBE, 0xBF,
+    0xC0, 0xC1, 0xC2, 0xC3, 0xC4, 0xC5, 0xC6, 0xC7, 0xC8, 0xC9, 0xCA, 0xCB, 0xCC, 0xCD, 0xCE, 0xCF,
+    0xD0, 0xD1, 0xD2, 0xD3, 0xD4, 0xD5, 0xD6, 0xD7, 0xD8, 0xD9, 0xDA, 0xDB, 0xDC, 0xDD, 0xDE, 0xDF,
+    0xE0, 0xE1, 0xE2, 0xE3, 0xE4, 0xE5, 0xE6, 0xE7, 0xE8, 0xE9, 0xEA, 0xEB, 0xEC, 0xED, 0xEE, 0xEF,
+    0xF0, 0xF1, 0xF2, 0xF3, 0xF4, 0xF5, 0xF6, 0xF7, 0xF8, 0xF9, 0xFA, 0xFB, 0xFC, 0xFD, 0xFE, 0xFF
+};
+
+// 2F (/) -> 5C (\)
+unsigned char AsciiToUpperTable_BS2FS[256] =
+{
+    0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F,
+    0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18, 0x19, 0x1A, 0x1B, 0x1C, 0x1D, 0x1E, 0x1F,
+    0x20, 0x21, 0x22, 0x23, 0x24, 0x25, 0x26, 0x27, 0x28, 0x29, 0x2A, 0x2B, 0x2C, 0x2D, 0x2E, 0x5C,
+    0x30, 0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37, 0x38, 0x39, 0x3A, 0x3B, 0x3C, 0x3D, 0x3E, 0x3F,
+    0x40, 0x41, 0x42, 0x43, 0x44, 0x45, 0x46, 0x47, 0x48, 0x49, 0x4A, 0x4B, 0x4C, 0x4D, 0x4E, 0x4F,
+    0x50, 0x51, 0x52, 0x53, 0x54, 0x55, 0x56, 0x57, 0x58, 0x59, 0x5A, 0x5B, 0x5C, 0x5D, 0x5E, 0x5F,
+    0x60, 0x41, 0x42, 0x43, 0x44, 0x45, 0x46, 0x47, 0x48, 0x49, 0x4A, 0x4B, 0x4C, 0x4D, 0x4E, 0x4F,
+    0x50, 0x51, 0x52, 0x53, 0x54, 0x55, 0x56, 0x57, 0x58, 0x59, 0x5A, 0x7B, 0x7C, 0x7D, 0x7E, 0x7F,
+    0x80, 0x81, 0x82, 0x83, 0x84, 0x85, 0x86, 0x87, 0x88, 0x89, 0x8A, 0x8B, 0x8C, 0x8D, 0x8E, 0x8F,
+    0x90, 0x91, 0x92, 0x93, 0x94, 0x95, 0x96, 0x97, 0x98, 0x99, 0x9A, 0x9B, 0x9C, 0x9D, 0x9E, 0x9F,
+    0xA0, 0xA1, 0xA2, 0xA3, 0xA4, 0xA5, 0xA6, 0xA7, 0xA8, 0xA9, 0xAA, 0xAB, 0xAC, 0xAD, 0xAE, 0xAF,
+    0xB0, 0xB1, 0xB2, 0xB3, 0xB4, 0xB5, 0xB6, 0xB7, 0xB8, 0xB9, 0xBA, 0xBB, 0xBC, 0xBD, 0xBE, 0xBF,
+    0xC0, 0xC1, 0xC2, 0xC3, 0xC4, 0xC5, 0xC6, 0xC7, 0xC8, 0xC9, 0xCA, 0xCB, 0xCC, 0xCD, 0xCE, 0xCF,
+    0xD0, 0xD1, 0xD2, 0xD3, 0xD4, 0xD5, 0xD6, 0xD7, 0xD8, 0xD9, 0xDA, 0xDB, 0xDC, 0xDD, 0xDE, 0xDF,
+    0xE0, 0xE1, 0xE2, 0xE3, 0xE4, 0xE5, 0xE6, 0xE7, 0xE8, 0xE9, 0xEA, 0xEB, 0xEC, 0xED, 0xEE, 0xEF,
+    0xF0, 0xF1, 0xF2, 0xF3, 0xF4, 0xF5, 0xF6, 0xF7, 0xF8, 0xF9, 0xFA, 0xFB, 0xFC, 0xFD, 0xFE, 0xFF
+};
+
+
 //-----------------------------------------------------------------------------
 // Safe string functions (for ANSI builds)
 
@@ -303,7 +346,29 @@ DWORD HashStringSlash(const char * szFileName, DWORD dwHashType)
     {
         // Convert the input character to uppercase
         // DON'T convert slash (0x2F) to backslash (0x5C)
-        ch = AsciiToUpperTable_Slash[*pbKey++];
+		ch = AsciiToUpperTable_FS2BS[*pbKey++];
+		//ch = AsciiToUpperTable[*pbKey++];
+
+        dwSeed1 = StormBuffer[dwHashType + ch] ^ (dwSeed1 + dwSeed2);
+        dwSeed2 = ch + dwSeed1 + dwSeed2 + (dwSeed2 << 5) + 3;
+    }
+
+    return dwSeed1;
+}
+
+DWORD HashStringSlash2(const char* szFileName, DWORD dwHashType)
+{
+    LPBYTE pbKey = (BYTE*)szFileName;
+    DWORD  dwSeed1 = 0x7FED7FED;
+    DWORD  dwSeed2 = 0xEEEEEEEE;
+    DWORD  ch;
+
+    while (*pbKey != 0)
+    {
+        // Convert the input character to uppercase
+        // DON'T convert slash (0x2F) to backslash (0x5C)
+        //ch = AsciiToUpperTable_Slash[*pbKey++];
+        ch = AsciiToUpperTable_BS2FS[*pbKey++];
 
         dwSeed1 = StormBuffer[dwHashType + ch] ^ (dwSeed1 + dwSeed2);
         dwSeed2 = ch + dwSeed1 + dwSeed2 + (dwSeed2 << 5) + 3;
@@ -552,52 +617,46 @@ void DecryptMpqBlock(void * pvDataBlock, DWORD dwLength, DWORD dwKey1)
 
 DWORD DetectFileKeyBySectorSize(LPDWORD EncryptedData, DWORD dwSectorSize, DWORD dwDecrypted0)
 {
+    DWORD dwDecrypted1Max = dwSectorSize + dwDecrypted0;
+    DWORD dwKey1PlusKey2;
+    DWORD DataBlock[2];
+
     // We must have at least 2 DWORDs there to be able to decrypt something
-    if(dwSectorSize >= 0x08)
+    if(dwSectorSize < 0x08)
+        return 0;
+
+    // Get the value of the combined encryption key
+    dwKey1PlusKey2 = (EncryptedData[0] ^ dwDecrypted0) - 0xEEEEEEEE;
+
+    // Try all 256 combinations of dwKey1
+    for(DWORD i = 0; i < 0x100; i++)
     {
-        // Also try subsequent three values. This is because the value of the sector offset[0]
-        // could be higher than the total size of the sector table.
-        // Example MPQ: MPQ_2021_v1_CantExtractCHK.scx
-        for(DWORD dwDecrypted4 = dwDecrypted0 + 4; dwDecrypted0 < dwDecrypted4; dwDecrypted0++)
+        DWORD dwSaveKey1;
+        DWORD dwKey1 = dwKey1PlusKey2 - StormBuffer[MPQ_HASH_KEY2_MIX + i];
+        DWORD dwKey2 = 0xEEEEEEEE;
+
+        // Modify the second key and decrypt the first DWORD
+        dwKey2 += StormBuffer[MPQ_HASH_KEY2_MIX + (dwKey1 & 0xFF)];
+        DataBlock[0] = EncryptedData[0] ^ (dwKey1 + dwKey2);
+
+        // Did we obtain the same value like dwDecrypted0?
+        if(DataBlock[0] == dwDecrypted0)
         {
-            DWORD dwDecrypted1Max = dwSectorSize + dwDecrypted0;
-            DWORD dwKey1PlusKey2;
-            DWORD DataBlock[2];
+            // Save this key value. Increment by one because
+            // we are decrypting sector offset table
+            dwSaveKey1 = dwKey1 + 1;
 
-            // Get the value of the combined encryption key
-            dwKey1PlusKey2 = (EncryptedData[0] ^ dwDecrypted0) - 0xEEEEEEEE;
+            // Rotate both keys
+            dwKey1 = ((~dwKey1 << 0x15) + 0x11111111) | (dwKey1 >> 0x0B);
+            dwKey2 = DataBlock[0] + dwKey2 + (dwKey2 << 5) + 3;
 
-            // Try all 256 combinations of dwKey1
-            for(DWORD i = 0; i < 0x100; i++)
-            {
-                DWORD dwSaveKey1;
-                DWORD dwKey1 = dwKey1PlusKey2 - StormBuffer[MPQ_HASH_KEY2_MIX + i];
-                DWORD dwKey2 = 0xEEEEEEEE;
+            // Modify the second key again and decrypt the second DWORD
+            dwKey2 += StormBuffer[MPQ_HASH_KEY2_MIX + (dwKey1 & 0xFF)];
+            DataBlock[1] = EncryptedData[1] ^ (dwKey1 + dwKey2);
 
-                // Modify the second key and decrypt the first DWORD
-                dwKey2 += StormBuffer[MPQ_HASH_KEY2_MIX + (dwKey1 & 0xFF)];
-                DataBlock[0] = EncryptedData[0] ^ (dwKey1 + dwKey2);
-
-                // Did we obtain the same value like dwDecrypted0?
-                if(DataBlock[0] == dwDecrypted0)
-                {
-                    // Save this key value. Increment by one because
-                    // we are decrypting sector offset table
-                    dwSaveKey1 = dwKey1 + 1;
-
-                    // Rotate both keys
-                    dwKey1 = ((~dwKey1 << 0x15) + 0x11111111) | (dwKey1 >> 0x0B);
-                    dwKey2 = DataBlock[0] + dwKey2 + (dwKey2 << 5) + 3;
-
-                    // Modify the second key again and decrypt the second DWORD
-                    dwKey2 += StormBuffer[MPQ_HASH_KEY2_MIX + (dwKey1 & 0xFF)];
-                    DataBlock[1] = EncryptedData[1] ^ (dwKey1 + dwKey2);
-
-                    // Now compare the results
-                    if(DataBlock[1] <= dwDecrypted1Max)
-                        return dwSaveKey1;
-                }
-            }
+            // Now compare the results
+            if(DataBlock[1] <= dwDecrypted1Max)
+                return dwSaveKey1;
         }
     }
 
@@ -788,9 +847,13 @@ TMPQHash * GetFirstHashEntry(TMPQArchive * ha, const char * szFileName)
 {
     DWORD dwHashIndexMask = HASH_INDEX_MASK(ha);
     DWORD dwStartIndex = ha->pfnHashString(szFileName, MPQ_HASH_TABLE_INDEX);
+    DWORD dwStartIndex2 = HashStringSlash2(szFileName, MPQ_HASH_TABLE_INDEX);
     DWORD dwName1 = ha->pfnHashString(szFileName, MPQ_HASH_NAME_A);
     DWORD dwName2 = ha->pfnHashString(szFileName, MPQ_HASH_NAME_B);
+    DWORD dwName1B = HashStringSlash2(szFileName, MPQ_HASH_NAME_A);
+    DWORD dwName2B = HashStringSlash2(szFileName, MPQ_HASH_NAME_B);
     DWORD dwIndex;
+    bool isSecondTry = false;
 
     // Set the initial index
     dwStartIndex = dwIndex = (dwStartIndex & dwHashIndexMask);
@@ -801,12 +864,22 @@ TMPQHash * GetFirstHashEntry(TMPQArchive * ha, const char * szFileName)
         TMPQHash * pHash = ha->pHashTable + dwIndex;
 
         // If the entry matches, we found it.
-        if(pHash->dwName1 == dwName1 && pHash->dwName2 == dwName2 && MPQ_BLOCK_INDEX(pHash) < ha->dwFileTableSize)
+        if ((pHash->dwName1 == dwName1 && pHash->dwName2 == dwName2 || (pHash->dwName1 == dwName1B && pHash->dwName2 == dwName2B)) && MPQ_BLOCK_INDEX(pHash) < ha->dwFileTableSize)
             return pHash;
 
         // If that hash entry is a free entry, it means we haven't found the file
-        if(pHash->dwBlockIndex == HASH_ENTRY_FREE)
-            return NULL;
+        if (pHash->dwBlockIndex == HASH_ENTRY_FREE)
+        {
+            // We've tried back slashes, now let's try forward slashes
+            if (!isSecondTry)
+            {
+                dwStartIndex = dwIndex = (dwStartIndex2 & dwHashIndexMask);
+                isSecondTry = true;
+                continue;
+            }
+            else
+                return NULL;
+        }
 
         // Move to the next hash entry. Stop searching
         // if we got reached the original hash entry
@@ -871,6 +944,7 @@ TMPQHash * AllocateHashEntry(
     return pHash;
 }
 
+
 // Finds a free space in the MPQ where to store next data
 // The free space begins beyond the file that is stored at the fuhrtest
 // position in the MPQ. (listfile), (attributes) and (signature) are ignored,
@@ -883,8 +957,13 @@ ULONGLONG FindFreeMpqSpace(TMPQArchive * ha)
     ULONGLONG FreeSpacePos = ha->pHeader->dwHeaderSize;
     DWORD dwChunkCount;
 
+    //static TFileEntry* furthestFile = nullptr;
+    //TFileEntry* startEntry = furthestFile == nullptr ? ha->pFileTable : furthestFile;
+
+    TFileEntry* startEntry = (ha->useFreeSpaceOptimization && ha->lastFreeSpaceEntry != nullptr) ? ha->lastFreeSpaceEntry : ha->pFileTable;
+
     // Parse the entire block table
-    for(pFileEntry = ha->pFileTable; pFileEntry < pFileTableEnd; pFileEntry++)
+    for(pFileEntry = startEntry; pFileEntry < pFileTableEnd; pFileEntry++)
     {
         // Only take existing files with nonzero size
         if((pFileEntry->dwFlags & MPQ_FILE_EXISTS) && (pFileEntry->dwCmpSize != 0))
@@ -905,6 +984,11 @@ ULONGLONG FindFreeMpqSpace(TMPQArchive * ha)
                     dwChunkCount = ((pFileEntry->dwCmpSize - 1) / pHeader->dwRawChunkSize) + 1;
                     FreeSpacePos += dwChunkCount * MD5_DIGEST_SIZE;
                 }
+
+                ha->lastFreeSpaceEntry = pFileEntry;
+
+                //if (ha->useFreeSpaceOptimization)
+                    //break;
             }
         }
     }
@@ -992,7 +1076,7 @@ void * LoadMpqTable(
     DWORD dwCompressedSize,
     DWORD dwTableSize,
     DWORD dwKey,
-    DWORD * PtrRealTableSize)
+    bool * pbTableIsCut)
 {
     ULONGLONG FileSize = 0;
     LPBYTE pbCompressed = NULL;
@@ -1037,13 +1121,11 @@ void * LoadMpqTable(
                 // Fill the extra data with zeros
                 dwBytesToRead = (DWORD)(FileSize - ByteOffset);
                 memset(pbMpqTable + dwBytesToRead, 0, (dwTableSize - dwBytesToRead));
-            }
-        }
 
-        // Give the caller information that the table was cut
-        if(PtrRealTableSize != NULL)
-        {
-            PtrRealTableSize[0] = dwBytesToRead;
+                // Give the caller information that the table was cut
+                if(pbTableIsCut != NULL)
+                    pbTableIsCut[0] = true;
+            }
         }
 
         // If everything succeeded, read the raw table from the MPQ
@@ -1312,7 +1394,7 @@ DWORD AllocateSectorOffsets(TMPQFile * hf, bool bLoadFromFile)
                 DWORD dwSectorOffset0 = hf->SectorOffsets[i];
 
                 // Every following sector offset must be bigger than the previous one
-                if(dwSectorOffset1 < dwSectorOffset0)
+                if(dwSectorOffset1 <= dwSectorOffset0)
                 {
                     bSectorOffsetTableCorrupt = true;
                     break;
@@ -1342,12 +1424,11 @@ DWORD AllocateSectorOffsets(TMPQFile * hf, bool bLoadFromFile)
             // They are mostly empty on WoW release MPQs, but on MPQs from PTR,
             // they contain random non-zero data. Their meaning is unknown.
             //
-            // These extra values are, however, included in the dwCmpSize in the file
+            // These extra values are, however, include in the dwCmpSize in the file
             // table. We cannot ignore them, because compacting archive would fail
             //
 
-            // Clear the lower 2 bits in order to make sure that the value is aligned to 4 bytes
-            if((hf->SectorOffsets[0] & 0xFFFFFFFC) > dwSectorOffsLen)
+            if(hf->SectorOffsets[0] > dwSectorOffsLen)
             {
                 // MPQ protectors put some ridiculous values there. We must limit the extra bytes
                 if(hf->SectorOffsets[0] > (dwSectorOffsLen + 0x400))
@@ -1683,8 +1764,6 @@ void FreeFileHandle(TMPQFile *& hf)
             STORM_FREE(hf->SectorOffsets);
         if(hf->SectorChksums != NULL)
             STORM_FREE(hf->SectorChksums);
-        if(hf->hctx != NULL)
-            STORM_FREE(hf->hctx);
         if(hf->pbFileSector != NULL)
             STORM_FREE(hf->pbFileSector);
         if(hf->pStream != NULL)
@@ -1832,6 +1911,7 @@ void CalculateDataBlockHash(void * pvDataBlock, DWORD cbDataBlock, LPBYTE md5_ha
     md5_process(&md5_state, (unsigned char *)pvDataBlock, cbDataBlock);
     md5_done(&md5_state, md5_hash);
 }
+
 
 //-----------------------------------------------------------------------------
 // Swapping functions
